@@ -307,4 +307,4 @@ FormAgent follows Eino's orchestration principles:
 
 ## License
 
-[Your License Here]
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

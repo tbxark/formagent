@@ -4,3 +4,7 @@ format:
 	golangci-lint run --no-config --fix
 	go fmt ./...
 	go mod tidy
+
+.PHONY: test
+test:
+	FORMAGENT_RUN_LIVE_TESTS=1 go test ./testcases -v -parallel 2
