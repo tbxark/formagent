@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TBXark/formagent"
+	"github.com/tbxark/formagent"
 )
 
 // CustomCommandParser 自定义命令解析器示例

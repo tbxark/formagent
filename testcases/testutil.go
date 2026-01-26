@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/TBXark/formagent"
+	"github.com/tbxark/formagent"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 )

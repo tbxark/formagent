@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/TBXark/formagent"
+	"github.com/tbxark/formagent"
 )
 
 // TestStateQuery 测试状态查询功能

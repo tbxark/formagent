@@ -1,4 +1,4 @@
-module github.com/TBXark/formagent
+module github.com/tbxark/formagent
 
 go 1.25.6
 

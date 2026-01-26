@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/TBXark/formagent"
+	"github.com/tbxark/formagent"
 )
 
 type UserRegistrationForm struct {
