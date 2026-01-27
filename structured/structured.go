@@ -7,6 +7,7 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/components/tool/utils"
+	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -37,7 +38,7 @@ func NewChain[TInput, TOutput any](
 	}, nil
 }
 
-func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOutput, error) {
+func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput, opts ...compose.Option) (*TOutput, error) {
 	messages, err := s.promptBuilder(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("构建提示词失败: %w", err)
@@ -64,7 +65,7 @@ func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOu
 	return &result, nil
 }
 
-func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput) (*schema.StreamReader[*TOutput], error) {
+func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput, opts ...compose.Option) (*schema.StreamReader[*TOutput], error) {
 	messages, err := s.promptBuilder(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("构建提示词失败: %w", err)

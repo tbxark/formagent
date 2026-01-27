@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/compose"
 	"github.com/tbxark/formagent/command"
 	"github.com/tbxark/formagent/dialogue"
 	"github.com/tbxark/formagent/patch"
@@ -77,7 +78,7 @@ func NewToolBasedFormAgent[T any](
 	)
 }
 
-func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*types.Response[T], error) {
+func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*types.Response[T], error) {
 	state, err := a.stateStore.Read(ctx)
 	if err != nil {
 		return nil, err
