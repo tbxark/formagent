@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -64,33 +65,26 @@ func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req Requ
 }
 
 func buildPatchPrompt[T any](ctx context.Context, req Request[T]) ([]*schema.Message, error) {
-	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
-	systemPrompt := fmt.Sprintf(`You are a form-filling assistant.
-Analyze user input and call the %s tool to generate RFC6902 JSON Patch operations.
+	stateJSON, err := json.Marshal(req.CurrentState)
+	if err != nil {
+		return nil, fmt.Errorf("marshal form state: %w", err)
+	}
+	systemPrompt := fmt.Sprintf("You are a form assistant. Analyze user input and call %s to generate RFC6902 JSON Patch operations. Rules: only use explicit user info; use replace for updates and add for new fields; only use allowed paths; if nothing to extract, return empty operations.", updateFormToolName)
 
-Rules:
-- Only extract information explicitly provided by the user
-- Use "replace" for updating existing fields, "add" for new fields
-- Only use paths from the allowed paths list
-- If no information to extract, call the tool with an empty operations array`, updateFormToolName)
-
-	userPrompt := fmt.Sprintf(`Current form state:
-%s
-
-Allowed paths (you can only modify these):
-%s
-
-%s
-
-%s
-
-User input: %s`,
-		string(stateJSON),
-		FormatAllowedPaths(req.AllowedPaths),
-		FormatMissingFieldsSection(req.MissingFields),
-		FormatFieldGuidanceSection(req.FieldGuidance),
-		req.UserInput,
-	)
+	sections := []string{
+		fmt.Sprintf("Form state JSON: %s", string(stateJSON)),
+		fmt.Sprintf("Allowed paths:\n%s", formatAllowedPaths(req.AllowedPaths)),
+	}
+	if s := formatMissingFieldsSection(req.MissingFields); s != "" {
+		sections = append(sections, s)
+	}
+	if s := formatFieldGuidanceSection(req.FieldGuidance); s != "" {
+		sections = append(sections, s)
+	}
+	if req.UserInput != "" {
+		sections = append(sections, fmt.Sprintf("User input: %s", req.UserInput))
+	}
+	userPrompt := strings.Join(sections, "\n\n")
 
 	return []*schema.Message{
 		schema.SystemMessage(systemPrompt),
