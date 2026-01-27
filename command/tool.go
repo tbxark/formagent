@@ -1,4 +1,4 @@
-package formagent
+package command
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
-	"github.com/tbxark/formagent/structuredoutput"
+	"github.com/tbxark/formagent/structured"
 )
 
 const (
@@ -21,11 +21,11 @@ type parseCommandInput struct {
 }
 
 type ToolBasedCommandParser struct {
-	chain *structuredoutput.Chain[string, parseCommandInput]
+	chain *structured.Chain[string, parseCommandInput]
 }
 
 func NewToolBasedCommandParser(chatModel model.ToolCallingChatModel) (*ToolBasedCommandParser, error) {
-	chain, err := structuredoutput.NewChain[string, parseCommandInput](
+	chain, err := structured.NewChain[string, parseCommandInput](
 		chatModel,
 		buildParseCommandPrompt,
 		parseCommandToolName,

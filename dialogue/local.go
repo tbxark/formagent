@@ -1,8 +1,10 @@
-package formagent
+package dialogue
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/tbxark/formagent/types"
 )
 
 type LocalDialogueGenerator[T any] struct{}
@@ -11,7 +13,7 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Di
 	var message string
 	var action string
 	switch req.Phase {
-	case PhaseCollecting:
+	case types.PhaseCollecting:
 		if len(req.ValidationErrors) > 0 {
 			message = "请修正以下错误：\n"
 			for _, err := range req.ValidationErrors {
@@ -29,15 +31,15 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Di
 			action = "确认信息"
 		}
 
-	case PhaseConfirming:
+	case types.PhaseConfirming:
 		message = "请确认以上信息是否正确。您可以输入\"确认\"提交，或\"返回\"继续修改。"
 		action = "确认或返回"
 
-	case PhaseSubmitted:
+	case types.PhaseSubmitted:
 		message = "表单已成功提交！"
 		action = "完成"
 
-	case PhaseCancelled:
+	case types.PhaseCancelled:
 		message = "表单填写已取消。"
 		action = "已取消"
 

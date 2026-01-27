@@ -8,16 +8,19 @@ import (
 	"testing"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/agent"
+	"github.com/tbxark/formagent/command"
+	"github.com/tbxark/formagent/dialogue"
+	"github.com/tbxark/formagent/patch"
 )
 
 type agentOptions struct {
-	commandParser formagent.CommandParser
+	commandParser command.CommandParser
 }
 
 type AgentOption func(*agentOptions)
 
-func WithCommandParser(parser formagent.CommandParser) AgentOption {
+func WithCommandParser(parser command.CommandParser) AgentOption {
 	return func(o *agentOptions) {
 		o.commandParser = parser
 	}
@@ -70,7 +73,7 @@ func InitChatModel(t *testing.T) *openai.ChatModel {
 	return chatModel
 }
 
-func NewTestAgent(t *testing.T, opts ...AgentOption) *formagent.FormAgent[UserRegistrationForm] {
+func NewTestAgent(t *testing.T, opts ...AgentOption) *agent.FormAgent[UserRegistrationForm] {
 	chatModel := InitChatModel(t)
 	if chatModel == nil {
 		return nil
@@ -82,22 +85,22 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) *formagent.FormAgent[UserRe
 	}
 
 	if o.commandParser == nil {
-		agent, err := formagent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel)
+		agent, err := agent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel)
 		if err != nil {
 			t.Fatalf("创建 agent 失败: %v", err)
 		}
 		return agent
 	}
 
-	patchGen, err := formagent.NewToolBasedPatchGenerator[UserRegistrationForm](chatModel)
+	patchGen, err := patch.NewToolBasedPatchGenerator[UserRegistrationForm](chatModel)
 	if err != nil {
 		t.Fatalf("创建 patch generator 失败: %v", err)
 	}
-	dialogueGen, err := formagent.NewToolBasedDialogueGenerator[UserRegistrationForm](chatModel)
+	dialogueGen, err := dialogue.NewToolBasedDialogueGenerator[UserRegistrationForm](chatModel)
 	if err != nil {
 		t.Fatalf("创建 dialogue generator 失败: %v", err)
 	}
-	agent, err := formagent.NewFormAgent(&FormSpec{}, patchGen, dialogueGen, o.commandParser)
+	agent, err := agent.NewFormAgent(&FormSpec{}, patchGen, dialogueGen, o.commandParser)
 	if err != nil {
 		t.Fatalf("创建 agent 失败: %v", err)
 	}

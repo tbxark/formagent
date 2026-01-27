@@ -1,4 +1,4 @@
-package formagent
+package agent
 
 import (
 	"reflect"

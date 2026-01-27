@@ -1,7 +1,9 @@
-package formagent
+package dialogue
 
 import (
 	"context"
+
+	"github.com/tbxark/formagent/types"
 )
 
 type NextTurnPlan struct {
@@ -11,10 +13,10 @@ type NextTurnPlan struct {
 
 type DialogueRequest[T any] struct {
 	CurrentState T
-	Phase        Phase
+	Phase        types.Phase
 
-	MissingFields    []FieldInfo
-	ValidationErrors []ValidationError
+	MissingFields    []types.FieldInfo
+	ValidationErrors []types.ValidationError
 
 	LastUserInput string
 	PatchApplied  bool

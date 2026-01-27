@@ -1,4 +1,4 @@
-package formagent
+package dialogue
 
 import (
 	"context"
@@ -8,8 +8,7 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-
-	"github.com/tbxark/formagent/structuredoutput"
+	"github.com/tbxark/formagent/structured"
 )
 
 const (
@@ -23,12 +22,12 @@ type generateResponseInput struct {
 }
 
 type ToolBasedDialogueGenerator[T any] struct {
-	chain *structuredoutput.Chain[DialogueRequest[T], generateResponseInput]
+	chain *structured.Chain[DialogueRequest[T], generateResponseInput]
 }
 
 // NewToolBasedDialogueGenerator 创建基于工具调用的对话生成器
 func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedDialogueGenerator[T], error) {
-	chain, err := structuredoutput.NewChain[DialogueRequest[T], generateResponseInput](
+	chain, err := structured.NewChain[DialogueRequest[T], generateResponseInput](
 		chatModel,
 		buildDialoguePrompt[T],
 		generateResponseToolName,
@@ -73,9 +72,9 @@ Form state:
 %s`,
 		string(req.Phase),
 		string(stateJSON),
-		formatUserInputSection(req.LastUserInput, req.PatchApplied),
-		formatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase),
-		formatValidationErrorsSection(req.ValidationErrors),
+		FormatUserInputSection(req.LastUserInput, req.PatchApplied),
+		FormatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase),
+		FormatValidationErrorsSection(req.ValidationErrors),
 	)
 
 	return []*schema.Message{

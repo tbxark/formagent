@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestStateQuery 测试状态查询功能
@@ -14,7 +14,7 @@ func TestStateQuery(t *testing.T) {
 	agent := NewTestAgent(t)
 
 	// 初始状态
-	if agent.GetPhase() != formagent.PhaseCollecting {
+	if agent.GetPhase() != types.PhaseCollecting {
 		t.Errorf("初始阶段应为 collecting，实际为 %s", agent.GetPhase())
 	}
 
@@ -33,7 +33,7 @@ func TestStateQuery(t *testing.T) {
 	phase1 := agent.GetPhase()
 	state1 := agent.GetCurrentState()
 
-	if phase1 != formagent.PhaseCollecting {
+	if phase1 != types.PhaseCollecting {
 		t.Errorf("阶段应为 collecting，实际为 %s", phase1)
 	}
 	if state1.Name != "郑十" {
@@ -49,7 +49,7 @@ func TestStateQuery(t *testing.T) {
 	phase2 := agent.GetPhase()
 	state2 := agent.GetCurrentState()
 
-	if phase2 != formagent.PhaseCollecting {
+	if phase2 != types.PhaseCollecting {
 		t.Errorf("阶段应为 collecting，实际为 %s", phase2)
 	}
 	if state2.Email != "zhengshi@testcases.com" {
@@ -65,7 +65,7 @@ func TestStateQuery(t *testing.T) {
 	phase3 := agent.GetPhase()
 	state3 := agent.GetCurrentState()
 
-	if phase3 != formagent.PhaseConfirming {
+	if phase3 != types.PhaseConfirming {
 		t.Errorf("阶段应为 confirming，实际为 %s", phase3)
 	}
 	if state3.Age != 45 {

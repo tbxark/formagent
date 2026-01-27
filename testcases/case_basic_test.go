@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestBasicUsage 测试基本的表单填写流程
@@ -20,7 +20,7 @@ func TestBasicUsage(t *testing.T) {
 	}
 
 	// 验证响应
-	if resp.Phase != formagent.PhaseCollecting {
+	if resp.Phase != types.PhaseCollecting {
 		t.Errorf("期望阶段为 collecting，实际为 %s", resp.Phase)
 	}
 	if resp.Completed {
@@ -46,7 +46,7 @@ func TestBasicUsage(t *testing.T) {
 	}
 
 	// 验证进入确认阶段
-	if resp.Phase != formagent.PhaseConfirming {
+	if resp.Phase != types.PhaseConfirming {
 		t.Errorf("期望阶段为 confirming，实际为 %s", resp.Phase)
 	}
 
@@ -65,7 +65,7 @@ func TestBasicUsage(t *testing.T) {
 	}
 
 	// 验证提交成功
-	if resp.Phase != formagent.PhaseSubmitted {
+	if resp.Phase != types.PhaseSubmitted {
 		t.Errorf("期望阶段为 submitted，实际为 %s", resp.Phase)
 	}
 	if !resp.Completed {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestValidationError 测试表单验证和错误处理
@@ -28,7 +28,7 @@ func TestValidationError(t *testing.T) {
 	}
 
 	// 验证仍在收集阶段（因为验证失败）
-	if resp.Phase != formagent.PhaseCollecting {
+	if resp.Phase != types.PhaseCollecting {
 		t.Errorf("验证失败时应保持在 collecting 阶段，实际为 %s", resp.Phase)
 	}
 
@@ -43,7 +43,7 @@ func TestValidationError(t *testing.T) {
 	}
 
 	// 验证进入确认阶段
-	if resp.Phase != formagent.PhaseConfirming {
+	if resp.Phase != types.PhaseConfirming {
 		t.Errorf("修正后应进入 confirming 阶段，实际为 %s", resp.Phase)
 	}
 
@@ -61,7 +61,7 @@ func TestValidationError(t *testing.T) {
 		t.Fatalf("确认提交失败: %v", err)
 	}
 
-	if resp.Phase != formagent.PhaseSubmitted {
+	if resp.Phase != types.PhaseSubmitted {
 		t.Errorf("期望阶段为 submitted，实际为 %s", resp.Phase)
 	}
 	if !resp.Completed {

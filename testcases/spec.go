@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 type UserRegistrationForm struct {
@@ -28,17 +28,17 @@ func (s *FormSpec) FieldGuide(fieldPath string) string {
 	return guides[fieldPath]
 }
 
-func (s *FormSpec) MissingFacts(current UserRegistrationForm) []formagent.FieldInfo {
-	var missing []formagent.FieldInfo
+func (s *FormSpec) MissingFacts(current UserRegistrationForm) []types.FieldInfo {
+	var missing []types.FieldInfo
 	if current.Name == "" {
-		missing = append(missing, formagent.FieldInfo{
+		missing = append(missing, types.FieldInfo{
 			JSONPointer: "/name",
 			DisplayName: "姓名",
 			Required:    true,
 		})
 	}
 	if current.Email == "" {
-		missing = append(missing, formagent.FieldInfo{
+		missing = append(missing, types.FieldInfo{
 			JSONPointer: "/email",
 			DisplayName: "邮箱",
 			Required:    true,
@@ -47,10 +47,10 @@ func (s *FormSpec) MissingFacts(current UserRegistrationForm) []formagent.FieldI
 	return missing
 }
 
-func (s *FormSpec) ValidateFacts(current UserRegistrationForm) []formagent.ValidationError {
-	var errors []formagent.ValidationError
+func (s *FormSpec) ValidateFacts(current UserRegistrationForm) []types.ValidationError {
+	var errors []types.ValidationError
 	if current.Age < 18 || current.Age > 100 {
-		errors = append(errors, formagent.ValidationError{
+		errors = append(errors, types.ValidationError{
 			JSONPointer: "/age",
 			Message:     "年龄必须在 18-100 之间",
 		})

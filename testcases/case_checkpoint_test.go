@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestCheckpointResume 测试 checkpoint 保存和恢复
@@ -72,7 +72,7 @@ func TestCheckpointResume(t *testing.T) {
 		t.Fatalf("确认提交失败: %v", err)
 	}
 
-	if resp.Phase != formagent.PhaseSubmitted {
+	if resp.Phase != types.PhaseSubmitted {
 		t.Errorf("期望阶段为 submitted，实际为 %s", resp.Phase)
 	}
 	if !resp.Completed {

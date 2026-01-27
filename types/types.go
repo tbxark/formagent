@@ -1,4 +1,4 @@
-package formagent
+package types
 
 import (
 	"time"

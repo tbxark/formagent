@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestInitialState 测试使用预填充的初始状态
@@ -40,7 +40,7 @@ func TestInitialState(t *testing.T) {
 	}
 
 	// 应该进入确认阶段（所有必填字段已填写）
-	if resp.Phase != formagent.PhaseConfirming {
+	if resp.Phase != types.PhaseConfirming {
 		t.Errorf("期望阶段为 confirming，实际为 %s", resp.Phase)
 	}
 
@@ -53,7 +53,7 @@ func TestInitialState(t *testing.T) {
 		t.Fatalf("确认提交失败: %v", err)
 	}
 
-	if resp.Phase != formagent.PhaseSubmitted {
+	if resp.Phase != types.PhaseSubmitted {
 		t.Errorf("期望阶段为 submitted，实际为 %s", resp.Phase)
 	}
 	if !resp.Completed {

@@ -1,6 +1,10 @@
-package formagent
+package patch
 
-import "context"
+import (
+	"context"
+
+	"github.com/tbxark/formagent/types"
+)
 
 type PatchOperation struct {
 	Op    string `json:"op"`
@@ -16,7 +20,7 @@ type PatchRequest[T any] struct {
 	UserInput     string
 	CurrentState  T
 	AllowedPaths  []string
-	MissingFields []FieldInfo
+	MissingFields []types.FieldInfo
 
 	FieldGuidance map[string]string
 }

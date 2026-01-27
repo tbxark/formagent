@@ -1,4 +1,4 @@
-package formagent
+package patch
 
 import (
 	"context"
@@ -8,8 +8,7 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-
-	"github.com/tbxark/formagent/structuredoutput"
+	"github.com/tbxark/formagent/structured"
 )
 
 const (
@@ -22,12 +21,12 @@ type updateFormInput struct {
 }
 
 type ToolBasedPatchGenerator[T any] struct {
-	chain *structuredoutput.Chain[PatchRequest[T], updateFormInput]
+	chain *structured.Chain[PatchRequest[T], updateFormInput]
 }
 
 // NewToolBasedPatchGenerator 创建基于工具调用的补丁生成器
 func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedPatchGenerator[T], error) {
-	chain, err := structuredoutput.NewChain[PatchRequest[T], updateFormInput](
+	chain, err := structured.NewChain[PatchRequest[T], updateFormInput](
 		chatModel,
 		buildPatchPrompt[T],
 		updateFormToolName,
@@ -87,9 +86,9 @@ Allowed paths (you can only modify these):
 
 User input: %s`,
 		string(stateJSON),
-		formatAllowedPaths(req.AllowedPaths),
-		formatMissingFieldsSection(req.MissingFields),
-		formatFieldGuidanceSection(req.FieldGuidance),
+		FormatAllowedPaths(req.AllowedPaths),
+		FormatMissingFieldsSection(req.MissingFields),
+		FormatFieldGuidanceSection(req.FieldGuidance),
 		req.UserInput,
 	)
 

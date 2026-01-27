@@ -1,4 +1,4 @@
-package structuredoutput
+package structured
 
 import (
 	"context"

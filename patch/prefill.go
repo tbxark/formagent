@@ -1,4 +1,4 @@
-package formagent
+package patch
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"reflect"
 )
 
-func generatePatchesFromInitial[T any](current, initial T) ([]PatchOperation, error) {
+func GeneratePatchesFromInitial[T any](current, initial T) ([]PatchOperation, error) {
 	currentJSON, err := json.Marshal(current)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal current state: %w", err)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/tbxark/formagent"
+	"github.com/tbxark/formagent/types"
 )
 
 // TestBackToEdit 测试返回编辑功能
@@ -23,7 +23,7 @@ func TestBackToEdit(t *testing.T) {
 	}
 
 	// 验证进入确认阶段
-	if resp.Phase != formagent.PhaseConfirming {
+	if resp.Phase != types.PhaseConfirming {
 		t.Errorf("期望阶段为 confirming，实际为 %s", resp.Phase)
 	}
 
@@ -36,7 +36,7 @@ func TestBackToEdit(t *testing.T) {
 	}
 
 	// 验证返回到收集阶段
-	if resp.Phase != formagent.PhaseCollecting {
+	if resp.Phase != types.PhaseCollecting {
 		t.Errorf("返回后应在 collecting 阶段，实际为 %s", resp.Phase)
 	}
 
@@ -72,7 +72,7 @@ func TestCancel(t *testing.T) {
 	}
 
 	// 验证取消状态
-	if resp.Phase != formagent.PhaseCancelled {
+	if resp.Phase != types.PhaseCancelled {
 		t.Errorf("期望阶段为 cancelled，实际为 %s", resp.Phase)
 	}
 	if !resp.Completed {
