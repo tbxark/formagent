@@ -2,10 +2,7 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"sync"
-	"time"
 
 	"github.com/tbxark/formagent/types"
 )
@@ -84,35 +81,4 @@ func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state State[T]) er
 	m.states[stateKeyOrDefault(ctx)] = state
 	m.mu.Unlock()
 	return nil
-}
-
-// MarshalCheckpoint serializes the state into a checkpoint payload.
-func MarshalCheckpoint[T any](state State[T], allowedPaths []string) ([]byte, error) {
-	checkpoint := types.Checkpoint[T]{
-		Version:      "1.0",
-		Phase:        state.Phase,
-		FormState:    state.FormState,
-		Timestamp:    time.Now(),
-		AllowedPaths: allowedPaths,
-	}
-	data, err := json.Marshal(checkpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal checkpoint: %w", err)
-	}
-	return data, nil
-}
-
-// UnmarshalCheckpoint parses a checkpoint payload into state.
-func UnmarshalCheckpoint[T any](data []byte) (State[T], error) {
-	var checkpoint types.Checkpoint[T]
-	if err := json.Unmarshal(data, &checkpoint); err != nil {
-		return State[T]{}, fmt.Errorf("failed to unmarshal checkpoint: %w", err)
-	}
-	if checkpoint.Version != "1.0" {
-		return State[T]{}, fmt.Errorf("incompatible checkpoint version: %s (expected 1.0)", checkpoint.Version)
-	}
-	return State[T]{
-		Phase:     checkpoint.Phase,
-		FormState: checkpoint.FormState,
-	}, nil
 }

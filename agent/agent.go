@@ -78,7 +78,7 @@ func NewToolBasedFormAgent[T any](
 	)
 }
 
-func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*types.Response[T], error) {
+func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*Response[T], error) {
 	state, err := a.stateStore.Read(ctx)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose
 	return response, nil
 }
 
-func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state State[T]) (*types.Response[T], State[T], error) {
+func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state State[T]) (*Response[T], State[T], error) {
 	cmd, err := a.commandParser.ParseCommand(ctx, input)
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false, state)
@@ -160,7 +160,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state Stat
 		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied, state)
 	}
 
-	return &types.Response[T]{
+	return &Response[T]{
 		Message:   plan.Message,
 		Phase:     state.Phase,
 		FormState: state.FormState,
@@ -171,7 +171,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state Stat
 	}, state, nil
 }
 
-func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, input string, state State[T]) (*types.Response[T], State[T], error) {
+func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, input string, state State[T]) (*Response[T], State[T], error) {
 	var message string
 	var completed bool
 
@@ -210,7 +210,7 @@ func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, i
 		return nil, state, fmt.Errorf("unknown command: %s", cmd)
 	}
 
-	return &types.Response[T]{
+	return &Response[T]{
 		Message:   message,
 		Phase:     state.Phase,
 		FormState: state.FormState,
@@ -219,7 +219,7 @@ func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, i
 	}, state, nil
 }
 
-func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state State[T]) (*types.Response[T], State[T], error) {
+func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state State[T]) (*Response[T], State[T], error) {
 	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
 
 	missingFields := a.spec.MissingFacts(state.FormState)
@@ -239,7 +239,7 @@ func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput str
 		message = plan.Message
 	}
 
-	return &types.Response[T]{
+	return &Response[T]{
 		Message:   message,
 		Phase:     state.Phase,
 		FormState: state.FormState,
