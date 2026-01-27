@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/tbxark/formagent/command"
 	"github.com/tbxark/formagent/dialogue"
@@ -12,7 +11,6 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-// FormAgent 是一个表单填写 Agent，实现了 Eino Runnable 接口
 type FormAgent[T any] struct {
 	spec              FormSpec[T]
 	patchGenerator    patch.Generator[T]
@@ -22,7 +20,6 @@ type FormAgent[T any] struct {
 	allowedPaths      map[string]bool
 }
 
-// NewFormAgent 创建一个新的 FormAgent 实例
 func NewFormAgent[T any](
 	spec FormSpec[T],
 	patchGen patch.Generator[T],
@@ -30,9 +27,6 @@ func NewFormAgent[T any](
 	commandParser command.Parser,
 	stateStore StateReadWriter[T],
 ) (*FormAgent[T], error) {
-	if stateStore == nil {
-		return nil, fmt.Errorf("state store is required")
-	}
 	allowedPaths := make(map[string]bool)
 	customPaths := spec.AllowedJSONPointers()
 	if len(customPaths) > 0 {
@@ -83,47 +77,23 @@ func NewToolBasedFormAgent[T any](
 	)
 }
 
-// Invoke 实现 Eino Runnable 接口
 func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*types.Response[T], error) {
 	state, err := a.stateStore.Read(ctx)
 	if err != nil {
-		callbacks.OnError(ctx, err)
 		return nil, err
 	}
 	if state.Phase == "" {
 		state.Phase = types.PhaseCollecting
 	}
 
-	ctx = callbacks.EnsureRunInfo(ctx, "FormAgent", "Agent")
-	ctx = callbacks.OnStart(ctx, map[string]any{
-		"input":      input,
-		"phase":      string(state.Phase),
-		"form_state": state.FormState,
-	})
-
-	defer func() {
-		if r := recover(); r != nil {
-			callbacks.OnError(ctx, fmt.Errorf("panic in FormAgent.Invoke: %v", r))
-			panic(r)
-		}
-	}()
-
 	response, nextState, err := a.runInternal(ctx, input, state)
 	if err != nil {
-		callbacks.OnError(ctx, err)
 		return nil, err
 	}
-	if err := a.stateStore.Write(ctx, nextState); err != nil {
-		callbacks.OnError(ctx, err)
+	err = a.stateStore.Write(ctx, nextState)
+	if err != nil {
 		return nil, err
 	}
-
-	callbacks.OnEnd(ctx, map[string]any{
-		"response":  response,
-		"phase":     string(response.Phase),
-		"completed": response.Completed,
-	})
-
 	return response, nil
 }
 
