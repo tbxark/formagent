@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -55,27 +56,26 @@ func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, re
 }
 
 func buildDialoguePrompt[T any](ctx context.Context, req Request[T]) ([]*schema.Message, error) {
-	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
-	systemPrompt := `You are a helpful form-filling assistant.
-Keep responses concise and natural. Match the user's language.
-Call the generate_response tool with the final response.`
+	stateJSON, err := json.Marshal(req.CurrentState)
+	if err != nil {
+		return nil, fmt.Errorf("marshal form state: %w", err)
+	}
+	systemPrompt := "You are a helpful form assistant. Keep responses concise and natural. Match the user's language. Call the generate_response tool with the final response."
 
-	userPrompt := fmt.Sprintf(`Phase: %s
-
-Form state:
-%s
-
-%s
-
-%s
-
-%s`,
-		string(req.Phase),
-		string(stateJSON),
-		FormatUserInputSection(req.LastUserInput, req.PatchApplied),
-		FormatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase),
-		FormatValidationErrorsSection(req.ValidationErrors),
-	)
+	sections := []string{
+		fmt.Sprintf("Phase: %s", req.Phase),
+		fmt.Sprintf("Form state JSON: %s", string(stateJSON)),
+	}
+	if s := formatUserInputSection(req.LastUserInput, req.PatchApplied); s != "" {
+		sections = append(sections, s)
+	}
+	if s := formatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase); s != "" {
+		sections = append(sections, s)
+	}
+	if s := formatValidationErrorsSection(req.ValidationErrors); s != "" {
+		sections = append(sections, s)
+	}
+	userPrompt := strings.Join(sections, "\n\n")
 
 	return []*schema.Message{
 		schema.SystemMessage(systemPrompt),
