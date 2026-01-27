@@ -8,9 +8,9 @@ const (
 	CommandCancel  Command = "cancel"
 	CommandConfirm Command = "confirm"
 	CommandBack    Command = "back"
-	CommandNone    Command = ""
+	CommandNone    Command = "none"
 )
 
 type CommandParser interface {
-	ParseCommand(ctx context.Context, input string) Command
+	ParseCommand(ctx context.Context, input string) (Command, error)
 }

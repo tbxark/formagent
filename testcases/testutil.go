@@ -7,9 +7,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/tbxark/formagent"
-
 	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/tbxark/formagent"
 )
 
 type agentOptions struct {
@@ -83,7 +82,7 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) *formagent.FormAgent[UserRe
 	}
 
 	if o.commandParser == nil {
-		agent, err := formagent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel)
+		agent, err := formagent.NewToolBasedFormAgent[UserRegistrationForm](context.Background(), &FormSpec{}, chatModel)
 		if err != nil {
 			t.Fatalf("创建 agent 失败: %v", err)
 		}

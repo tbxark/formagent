@@ -22,26 +22,26 @@ func NewDefaultCommandParser() *StaticCommandParser {
 	}
 }
 
-func (p *StaticCommandParser) ParseCommand(ctx context.Context, input string) Command {
+func (p *StaticCommandParser) ParseCommand(ctx context.Context, input string) (Command, error) {
 	normalized := strings.ToLower(strings.TrimSpace(input))
 
 	for _, keyword := range p.CancelKeywords {
 		if normalized == keyword {
-			return CommandCancel
+			return CommandCancel, nil
 		}
 	}
 
 	for _, keyword := range p.ConfirmKeywords {
 		if normalized == keyword {
-			return CommandConfirm
+			return CommandConfirm, nil
 		}
 	}
 
 	for _, keyword := range p.BackKeywords {
 		if normalized == keyword {
-			return CommandBack
+			return CommandBack, nil
 		}
 	}
 
-	return CommandNone
+	return CommandNone, nil
 }

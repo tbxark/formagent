@@ -55,14 +55,19 @@ func NewFormAgent[T any](
 }
 
 func NewToolBasedFormAgent[T any](
+	ctx context.Context,
 	spec FormSpec[T],
 	chatModel model.ToolCallingChatModel,
 ) (*FormAgent[T], error) {
+	parser, err := NewToolBasedCommandParser(ctx, chatModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
+	}
 	return NewFormAgent[T](
 		spec,
 		NewToolBasedPatchGenerator[T](chatModel),
 		NewToolBasedDialogueGenerator[T](chatModel),
-		NewToolBasedCommandParser(chatModel),
+		parser,
 	)
 }
 
@@ -98,7 +103,10 @@ func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*Response[T], 
 }
 
 func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*Response[T], error) {
-	cmd := a.commandParser.ParseCommand(ctx, input)
+	cmd, err := a.commandParser.ParseCommand(ctx, input)
+	if err != nil {
+		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false)
+	}
 	if cmd != CommandNone {
 		return a.handleCommand(ctx, cmd, input)
 	}
