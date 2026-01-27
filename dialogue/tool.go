@@ -22,12 +22,12 @@ type generateResponseInput struct {
 }
 
 type ToolBasedDialogueGenerator[T any] struct {
-	chain *structured.Chain[DialogueRequest[T], generateResponseInput]
+	chain *structured.Chain[Request[T], generateResponseInput]
 }
 
 // NewToolBasedDialogueGenerator 创建基于工具调用的对话生成器
 func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedDialogueGenerator[T], error) {
-	chain, err := structured.NewChain[DialogueRequest[T], generateResponseInput](
+	chain, err := structured.NewChain[Request[T], generateResponseInput](
 		chatModel,
 		buildDialoguePrompt[T],
 		generateResponseToolName,
@@ -39,7 +39,7 @@ func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) 
 	return &ToolBasedDialogueGenerator[T]{chain: chain}, nil
 }
 
-func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req DialogueRequest[T]) (*NextTurnPlan, error) {
+func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Request[T]) (*NextTurnPlan, error) {
 	slog.Debug("generate dialogue request", "phase", req.Phase, "has_input", req.LastUserInput != "", "missing_fields", len(req.MissingFields), "validation_errors", len(req.ValidationErrors))
 	result, err := g.chain.Invoke(ctx, req)
 	if err != nil {
@@ -54,7 +54,7 @@ func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, re
 	return &NextTurnPlan{Message: result.Message, SuggestedAction: result.SuggestedAction}, nil
 }
 
-func buildDialoguePrompt[T any](ctx context.Context, req DialogueRequest[T]) ([]*schema.Message, error) {
+func buildDialoguePrompt[T any](ctx context.Context, req Request[T]) ([]*schema.Message, error) {
 	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
 	systemPrompt := `You are a helpful form-filling assistant.
 Keep responses concise and natural. Match the user's language.

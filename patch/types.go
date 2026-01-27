@@ -6,17 +6,17 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-type PatchOperation struct {
+type Operation struct {
 	Op    string `json:"op"`
 	Path  string `json:"path"`
 	Value any    `json:"value,omitempty"`
 }
 
 type UpdateFormArgs struct {
-	Ops []PatchOperation `json:"ops"`
+	Ops []Operation `json:"ops"`
 }
 
-type PatchRequest[T any] struct {
+type Request[T any] struct {
 	UserInput     string
 	CurrentState  T
 	AllowedPaths  []string
@@ -25,6 +25,6 @@ type PatchRequest[T any] struct {
 	FieldGuidance map[string]string
 }
 
-type PatchGenerator[T any] interface {
-	GeneratePatch(ctx context.Context, req PatchRequest[T]) (UpdateFormArgs, error)
+type Generator[T any] interface {
+	GeneratePatch(ctx context.Context, req Request[T]) (UpdateFormArgs, error)
 }

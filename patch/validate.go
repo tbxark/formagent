@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func ValidatePatchOperations(ops []PatchOperation, allowedPaths map[string]bool) error {
+func ValidatePatchOperations(ops []Operation, allowedPaths map[string]bool) error {
 	if len(ops) == 0 {
 		return nil
 	}

@@ -27,30 +27,30 @@ func (p *StaticCommandParser) ParseCommand(ctx context.Context, input string) (C
 
 	for _, keyword := range p.CancelKeywords {
 		if normalized == keyword {
-			return CommandCancel, nil
+			return Cancel, nil
 		}
 	}
 
 	for _, keyword := range p.ConfirmKeywords {
 		if normalized == keyword {
-			return CommandConfirm, nil
+			return Confirm, nil
 		}
 	}
 
 	for _, keyword := range p.BackKeywords {
 		if normalized == keyword {
-			return CommandBack, nil
+			return Back, nil
 		}
 	}
 
-	return CommandNone, nil
+	return None, nil
 }
 
 type FailbackCommandParser struct {
-	parsers []CommandParser
+	parsers []Parser
 }
 
-func NewFailbackCommandParser(parsers ...CommandParser) *FailbackCommandParser {
+func NewFailbackCommandParser(parsers ...Parser) *FailbackCommandParser {
 	return &FailbackCommandParser{parsers: parsers}
 }
 
@@ -63,5 +63,5 @@ func (p *FailbackCommandParser) ParseCommand(ctx context.Context, input string) 
 		}
 		lastErr = err
 	}
-	return CommandNone, lastErr
+	return None, lastErr
 }

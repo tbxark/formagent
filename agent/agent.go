@@ -17,9 +17,9 @@ import (
 // FormAgent 是一个表单填写 Agent，实现了 Eino Runnable 接口
 type FormAgent[T any] struct {
 	spec              FormSpec[T]
-	patchGenerator    patch.PatchGenerator[T]
-	dialogueGenerator dialogue.DialogueGenerator[T]
-	commandParser     command.CommandParser
+	patchGenerator    patch.Generator[T]
+	dialogueGenerator dialogue.Generator[T]
+	commandParser     command.Parser
 	currentState      T
 	phase             types.Phase
 	allowedPaths      map[string]bool
@@ -28,9 +28,9 @@ type FormAgent[T any] struct {
 // NewFormAgent 创建一个新的 FormAgent 实例
 func NewFormAgent[T any](
 	spec FormSpec[T],
-	patchGen patch.PatchGenerator[T],
-	dialogGen dialogue.DialogueGenerator[T],
-	commandParser command.CommandParser,
+	patchGen patch.Generator[T],
+	dialogGen dialogue.Generator[T],
+	commandParser command.Parser,
 ) (*FormAgent[T], error) {
 	var zero T
 	allowedPaths := make(map[string]bool)
@@ -118,7 +118,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false)
 	}
-	if cmd != command.CommandNone {
+	if cmd != command.None {
 		return a.handleCommand(ctx, cmd, input)
 	}
 
@@ -131,7 +131,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 		}
 	}
 
-	patchReq := patch.PatchRequest[T]{
+	patchReq := patch.Request[T]{
 		UserInput:     input,
 		CurrentState:  a.currentState,
 		AllowedPaths:  a.getAllowedPathsList(),
@@ -161,7 +161,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 		a.phase = types.PhaseConfirming
 	}
 
-	dialogueReq := dialogue.DialogueRequest[T]{
+	dialogueReq := dialogue.Request[T]{
 		CurrentState:     a.currentState,
 		Phase:            a.phase,
 		MissingFields:    missingFields,
@@ -191,12 +191,12 @@ func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, i
 	var completed bool
 
 	switch cmd {
-	case command.CommandCancel:
+	case command.Cancel:
 		a.phase = types.PhaseCancelled
 		message = "表单填写已取消。"
 		completed = true
 
-	case command.CommandConfirm:
+	case command.Confirm:
 		if a.phase != types.PhaseConfirming {
 			message = "请先完成所有必填字段后再确认提交。"
 		} else {
@@ -213,7 +213,7 @@ func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, i
 			}
 		}
 
-	case command.CommandBack:
+	case command.Back:
 		if a.phase == types.PhaseConfirming {
 			a.phase = types.PhaseCollecting
 			message = "已返回编辑模式，您可以继续修改表单内容。"
@@ -240,7 +240,7 @@ func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput str
 	missingFields := a.spec.MissingFacts(a.currentState)
 	validationErrors := a.spec.ValidateFacts(a.currentState)
 
-	dialogueReq := dialogue.DialogueRequest[T]{
+	dialogueReq := dialogue.Request[T]{
 		CurrentState:     a.currentState,
 		Phase:            a.phase,
 		MissingFields:    missingFields,

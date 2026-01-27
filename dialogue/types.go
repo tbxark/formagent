@@ -11,7 +11,7 @@ type NextTurnPlan struct {
 	SuggestedAction string `json:"suggested_action,omitempty"`
 }
 
-type DialogueRequest[T any] struct {
+type Request[T any] struct {
 	CurrentState T
 	Phase        types.Phase
 
@@ -22,6 +22,6 @@ type DialogueRequest[T any] struct {
 	PatchApplied  bool
 }
 
-type DialogueGenerator[T any] interface {
-	GenerateDialogue(ctx context.Context, req DialogueRequest[T]) (*NextTurnPlan, error)
+type Generator[T any] interface {
+	GenerateDialogue(ctx context.Context, req Request[T]) (*NextTurnPlan, error)
 }

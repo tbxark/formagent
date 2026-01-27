@@ -9,7 +9,7 @@ import (
 
 type LocalDialogueGenerator[T any] struct{}
 
-func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req DialogueRequest[T]) (*NextTurnPlan, error) {
+func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Request[T]) (*NextTurnPlan, error) {
 	var message string
 	var action string
 	switch req.Phase {
@@ -51,14 +51,14 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Di
 }
 
 type FailbackDialogueGenerator[T any] struct {
-	generators []DialogueGenerator[T]
+	generators []Generator[T]
 }
 
-func NewFailbackDialogueGenerator[T any](generators ...DialogueGenerator[T]) *FailbackDialogueGenerator[T] {
+func NewFailbackDialogueGenerator[T any](generators ...Generator[T]) *FailbackDialogueGenerator[T] {
 	return &FailbackDialogueGenerator[T]{generators: generators}
 }
 
-func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req DialogueRequest[T]) (*NextTurnPlan, error) {
+func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req Request[T]) (*NextTurnPlan, error) {
 	var lastErr error
 	for _, generator := range g.generators {
 		plan, err := generator.GenerateDialogue(ctx, req)

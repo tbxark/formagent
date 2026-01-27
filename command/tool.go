@@ -40,10 +40,10 @@ func NewToolBasedCommandParser(chatModel model.ToolCallingChatModel) (*ToolBased
 func (p *ToolBasedCommandParser) ParseCommand(ctx context.Context, input string) (Command, error) {
 	result, err := p.chain.Invoke(ctx, input)
 	if err != nil {
-		return CommandNone, err
+		return None, err
 	}
 	if result == nil || result.Intent == "" {
-		return CommandNone, fmt.Errorf("empty intent returned by %s", parseCommandToolName)
+		return None, fmt.Errorf("empty intent returned by %s", parseCommandToolName)
 	}
 	return result.Intent, nil
 }

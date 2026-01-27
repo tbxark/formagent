@@ -17,16 +17,16 @@ const (
 )
 
 type updateFormInput struct {
-	Operations []PatchOperation `json:"operations" jsonschema:"description=Array of RFC6902 JSON Patch operations to update the form"`
+	Operations []Operation `json:"operations" jsonschema:"description=Array of RFC6902 JSON Patch operations to update the form"`
 }
 
 type ToolBasedPatchGenerator[T any] struct {
-	chain *structured.Chain[PatchRequest[T], updateFormInput]
+	chain *structured.Chain[Request[T], updateFormInput]
 }
 
 // NewToolBasedPatchGenerator 创建基于工具调用的补丁生成器
 func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedPatchGenerator[T], error) {
-	chain, err := structured.NewChain[PatchRequest[T], updateFormInput](
+	chain, err := structured.NewChain[Request[T], updateFormInput](
 		chatModel,
 		buildPatchPrompt[T],
 		updateFormToolName,
@@ -38,7 +38,7 @@ func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel) (*T
 	return &ToolBasedPatchGenerator[T]{chain: chain}, nil
 }
 
-func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req PatchRequest[T]) (UpdateFormArgs, error) {
+func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req Request[T]) (UpdateFormArgs, error) {
 	slog.Debug("generate patch request", "allowed_paths", len(req.AllowedPaths), "missing_fields", len(req.MissingFields), "has_guidance", len(req.FieldGuidance) > 0, "input_len", len(req.UserInput))
 	result, err := g.chain.Invoke(ctx, req)
 	if err != nil {
@@ -47,7 +47,7 @@ func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req Patc
 	}
 	if result == nil {
 		slog.Warn("generate patch returned nil result")
-		return UpdateFormArgs{Ops: []PatchOperation{}}, nil
+		return UpdateFormArgs{Ops: []Operation{}}, nil
 	}
 	slog.Debug("generate patch parsed", "operations", len(result.Operations))
 
@@ -63,7 +63,7 @@ func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req Patc
 	return UpdateFormArgs{Ops: result.Operations}, nil
 }
 
-func buildPatchPrompt[T any](ctx context.Context, req PatchRequest[T]) ([]*schema.Message, error) {
+func buildPatchPrompt[T any](ctx context.Context, req Request[T]) ([]*schema.Message, error) {
 	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
 	systemPrompt := fmt.Sprintf(`You are a form-filling assistant.
 Analyze user input and call the %s tool to generate RFC6902 JSON Patch operations.

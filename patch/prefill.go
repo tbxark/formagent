@@ -6,7 +6,7 @@ import (
 	"reflect"
 )
 
-func GeneratePatchesFromInitial[T any](current, initial T) ([]PatchOperation, error) {
+func GeneratePatchesFromInitial[T any](current, initial T) ([]Operation, error) {
 	currentJSON, err := json.Marshal(current)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal current state: %w", err)
@@ -27,12 +27,12 @@ func GeneratePatchesFromInitial[T any](current, initial T) ([]PatchOperation, er
 		return nil, fmt.Errorf("failed to unmarshal initial state: %w", err)
 	}
 
-	patches := make([]PatchOperation, 0)
+	patches := make([]Operation, 0)
 	generatePatchesFromMap("", currentMap, initialMap, &patches)
 	return patches, nil
 }
 
-func generatePatchesFromMap(prefix string, current, initial map[string]interface{}, patches *[]PatchOperation) {
+func generatePatchesFromMap(prefix string, current, initial map[string]interface{}, patches *[]Operation) {
 	for key, initialValue := range initial {
 		if initialValue == nil {
 			continue
@@ -49,7 +49,7 @@ func generatePatchesFromMap(prefix string, current, initial map[string]interface
 			if currentMap, ok := currentValue.(map[string]interface{}); ok {
 				generatePatchesFromMap(path, currentMap, initialMap, patches)
 			} else {
-				*patches = append(*patches, PatchOperation{Op: "replace", Path: path, Value: initialValue})
+				*patches = append(*patches, Operation{Op: "replace", Path: path, Value: initialValue})
 			}
 			continue
 		}
@@ -57,16 +57,16 @@ func generatePatchesFromMap(prefix string, current, initial map[string]interface
 		if initialArray, ok := initialValue.([]interface{}); ok {
 			if !existsInCurrent || !reflect.DeepEqual(currentValue, initialValue) {
 				if len(initialArray) > 0 {
-					*patches = append(*patches, PatchOperation{Op: "replace", Path: path, Value: initialValue})
+					*patches = append(*patches, Operation{Op: "replace", Path: path, Value: initialValue})
 				}
 			}
 			continue
 		}
 
 		if !existsInCurrent {
-			*patches = append(*patches, PatchOperation{Op: "add", Path: path, Value: initialValue})
+			*patches = append(*patches, Operation{Op: "add", Path: path, Value: initialValue})
 		} else if !reflect.DeepEqual(currentValue, initialValue) {
-			*patches = append(*patches, PatchOperation{Op: "replace", Path: path, Value: initialValue})
+			*patches = append(*patches, Operation{Op: "replace", Path: path, Value: initialValue})
 		}
 	}
 }

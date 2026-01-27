@@ -15,12 +15,12 @@ import (
 )
 
 type agentOptions struct {
-	commandParser command.CommandParser
+	commandParser command.Parser
 }
 
 type AgentOption func(*agentOptions)
 
-func WithCommandParser(parser command.CommandParser) AgentOption {
+func WithCommandParser(parser command.Parser) AgentOption {
 	return func(o *agentOptions) {
 		o.commandParser = parser
 	}

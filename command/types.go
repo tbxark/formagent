@@ -5,12 +5,12 @@ import "context"
 type Command string
 
 const (
-	CommandCancel  Command = "cancel"
-	CommandConfirm Command = "confirm"
-	CommandBack    Command = "back"
-	CommandNone    Command = "none"
+	Cancel  Command = "cancel"
+	Confirm Command = "confirm"
+	Back    Command = "back"
+	None    Command = "none"
 )
 
-type CommandParser interface {
+type Parser interface {
 	ParseCommand(ctx context.Context, input string) (Command, error)
 }
