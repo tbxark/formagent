@@ -1,6 +1,8 @@
 package formagent
 
-import "context"
+import (
+	"context"
+)
 
 type NextTurnPlan struct {
 	Message         string `json:"message"`

@@ -63,10 +63,18 @@ func NewToolBasedFormAgent[T any](
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
 	}
+	patchGen, err := NewToolBasedPatchGenerator[T](ctx, chatModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tool-based patch generator: %w", err)
+	}
+	dialogueGen, err := NewToolBasedDialogueGenerator[T](ctx, chatModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tool-based dialogue generator: %w", err)
+	}
 	return NewFormAgent[T](
 		spec,
-		NewToolBasedPatchGenerator[T](chatModel),
-		NewToolBasedDialogueGenerator[T](chatModel),
+		patchGen,
+		dialogueGen,
 		parser,
 	)
 }
