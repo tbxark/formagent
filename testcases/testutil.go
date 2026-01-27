@@ -16,6 +16,7 @@ import (
 
 type agentOptions struct {
 	commandParser command.Parser
+	stateStore    agent.StateReadWriter[UserRegistrationForm]
 }
 
 type AgentOption func(*agentOptions)
@@ -23,6 +24,12 @@ type AgentOption func(*agentOptions)
 func WithCommandParser(parser command.Parser) AgentOption {
 	return func(o *agentOptions) {
 		o.commandParser = parser
+	}
+}
+
+func WithStateStore(store agent.StateReadWriter[UserRegistrationForm]) AgentOption {
+	return func(o *agentOptions) {
+		o.stateStore = store
 	}
 }
 
@@ -73,10 +80,10 @@ func InitChatModel(t *testing.T) *openai.ChatModel {
 	return chatModel
 }
 
-func NewTestAgent(t *testing.T, opts ...AgentOption) *agent.FormAgent[UserRegistrationForm] {
+func NewTestAgent(t *testing.T, opts ...AgentOption) (*agent.FormAgent[UserRegistrationForm], *agent.MemoryStateReadWriter[UserRegistrationForm]) {
 	chatModel := InitChatModel(t)
 	if chatModel == nil {
-		return nil
+		return nil, nil
 	}
 
 	o := &agentOptions{}
@@ -84,12 +91,18 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) *agent.FormAgent[UserRegist
 		opt(o)
 	}
 
+	var memoryStore *agent.MemoryStateReadWriter[UserRegistrationForm]
+	if o.stateStore == nil {
+		memoryStore = agent.NewMemoryStateReadWriter[UserRegistrationForm]()
+		o.stateStore = memoryStore
+	}
+
 	if o.commandParser == nil {
-		agent, err := agent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel)
+		agent, err := agent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel, o.stateStore)
 		if err != nil {
 			t.Fatalf("创建 agent 失败: %v", err)
 		}
-		return agent
+		return agent, memoryStore
 	}
 
 	patchGen, err := patch.NewToolBasedPatchGenerator[UserRegistrationForm](chatModel)
@@ -100,11 +113,11 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) *agent.FormAgent[UserRegist
 	if err != nil {
 		t.Fatalf("创建 dialogue generator 失败: %v", err)
 	}
-	agent, err := agent.NewFormAgent(&FormSpec{}, patchGen, dialogueGen, o.commandParser)
+	agent, err := agent.NewFormAgent(&FormSpec{}, patchGen, dialogueGen, o.commandParser, o.stateStore)
 	if err != nil {
 		t.Fatalf("创建 agent 失败: %v", err)
 	}
-	return agent
+	return agent, memoryStore
 }
 
 func (c *Config) String() string {

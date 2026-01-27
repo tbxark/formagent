@@ -11,7 +11,7 @@ import (
 func TestBackToEdit(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, _ := NewTestAgent(t)
 
 	// 填写完整信息
 	if _, err := agent.Invoke(ctx, "我叫孙七，邮箱 sunqi@testcases.com，今年 40 岁"); err != nil {
@@ -61,7 +61,7 @@ func TestBackToEdit(t *testing.T) {
 func TestCancel(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, _ := NewTestAgent(t)
 
 	if _, err := agent.Invoke(ctx, "我叫周八"); err != nil {
 		t.Fatalf("第一轮失败: %v", err)

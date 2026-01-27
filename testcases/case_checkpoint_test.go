@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/tbxark/formagent/agent"
 	"github.com/tbxark/formagent/types"
 )
 
@@ -11,7 +12,7 @@ import (
 func TestCheckpointResume(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent1 := NewTestAgent(t)
+	agent1, store1 := NewTestAgent(t)
 
 	// 用户开始填写表单
 	resp, err := agent1.Invoke(ctx, "我叫李四，今年 30 岁")
@@ -32,7 +33,11 @@ func TestCheckpointResume(t *testing.T) {
 	t.Logf("当前状态: %+v", state1)
 
 	// 保存 checkpoint
-	checkpoint, err := agent1.CreateCheckpoint()
+	snapshot, err := store1.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取状态失败: %v", err)
+	}
+	checkpoint, err := agent.MarshalCheckpoint(snapshot, (&FormSpec{}).AllowedJSONPointers())
 	if err != nil {
 		t.Fatalf("创建 checkpoint 失败: %v", err)
 	}
@@ -43,10 +48,17 @@ func TestCheckpointResume(t *testing.T) {
 	t.Logf("保存 checkpoint: %d bytes", len(checkpoint))
 
 	// 创建新的 agent 实例（模拟用户稍后返回）
-	agent2 := NewTestAgent(t)
+	agent2, store2 := NewTestAgent(t)
 
 	// 从 checkpoint 恢复并继续
-	resp, err = agent2.InvokeWithCheckpoint(ctx, checkpoint, "我的邮箱是 lisi@testcases.com")
+	restoredState, err := agent.UnmarshalCheckpoint[UserRegistrationForm](checkpoint)
+	if err != nil {
+		t.Fatalf("解析 checkpoint 失败: %v", err)
+	}
+	if err := store2.Write(ctx, restoredState); err != nil {
+		t.Fatalf("恢复状态失败: %v", err)
+	}
+	resp, err = agent2.Invoke(ctx, "我的邮箱是 lisi@testcases.com")
 	if err != nil {
 		t.Fatalf("从 checkpoint 恢复失败: %v", err)
 	}

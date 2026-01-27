@@ -11,7 +11,7 @@ import (
 func TestValidationError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, _ := NewTestAgent(t)
 
 	// 用户输入基本信息
 	resp, err := agent.Invoke(ctx, "我叫赵六，邮箱是 zhaoliu@testcases.com")

@@ -3,13 +3,16 @@ package testcases
 import (
 	"context"
 	"testing"
+
+	formagent "github.com/tbxark/formagent/agent"
 )
 
 // TestMultipleCheckpoints 测试多个 checkpoint 的管理
 func TestMultipleCheckpoints(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, store := NewTestAgent(t)
+	allowedPaths := (&FormSpec{}).AllowedJSONPointers()
 
 	// 第一次中断点
 	resp, err := agent.Invoke(ctx, "我叫吴九")
@@ -17,7 +20,11 @@ func TestMultipleCheckpoints(t *testing.T) {
 		t.Fatalf("步骤1失败: %v", err)
 	}
 	state1 := resp.FormState
-	checkpoint1, err := agent.CreateCheckpoint()
+	snapshot1, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取 checkpoint1 状态失败: %v", err)
+	}
+	checkpoint1, err := formagent.MarshalCheckpoint(snapshot1, allowedPaths)
 	if err != nil {
 		t.Fatalf("创建 checkpoint1 失败: %v", err)
 	}
@@ -31,7 +38,11 @@ func TestMultipleCheckpoints(t *testing.T) {
 		t.Fatalf("步骤2失败: %v", err)
 	}
 	state2 := resp.FormState
-	checkpoint2, err := agent.CreateCheckpoint()
+	snapshot2, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取 checkpoint2 状态失败: %v", err)
+	}
+	checkpoint2, err := formagent.MarshalCheckpoint(snapshot2, allowedPaths)
 	if err != nil {
 		t.Fatalf("创建 checkpoint2 失败: %v", err)
 	}
@@ -45,7 +56,11 @@ func TestMultipleCheckpoints(t *testing.T) {
 		t.Fatalf("步骤3失败: %v", err)
 	}
 	state3 := resp.FormState
-	checkpoint3, err := agent.CreateCheckpoint()
+	snapshot3, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取 checkpoint3 状态失败: %v", err)
+	}
+	checkpoint3, err := formagent.MarshalCheckpoint(snapshot3, allowedPaths)
 	if err != nil {
 		t.Fatalf("创建 checkpoint3 失败: %v", err)
 	}
@@ -66,8 +81,15 @@ func TestMultipleCheckpoints(t *testing.T) {
 
 	// 从 checkpoint2 恢复（回退到中间状态）
 	t.Log("--- 从 checkpoint2 恢复 ---")
-	agent2 := NewTestAgent(t)
-	resp, err = agent2.InvokeWithCheckpoint(ctx, checkpoint2, "查看当前状态")
+	agent2, store2 := NewTestAgent(t)
+	restoredState, err := formagent.UnmarshalCheckpoint[UserRegistrationForm](checkpoint2)
+	if err != nil {
+		t.Fatalf("解析 checkpoint2 失败: %v", err)
+	}
+	if err := store2.Write(ctx, restoredState); err != nil {
+		t.Fatalf("恢复 checkpoint2 失败: %v", err)
+	}
+	resp, err = agent2.Invoke(ctx, "查看当前状态")
 	if err != nil {
 		t.Fatalf("从 checkpoint2 恢复失败: %v", err)
 	}

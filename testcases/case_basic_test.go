@@ -11,7 +11,7 @@ import (
 func TestBasicUsage(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, _ := NewTestAgent(t)
 
 	// 第一轮：提供部分信息
 	resp, err := agent.Invoke(ctx, "我叫张三，邮箱是 zhangsan@testcases.com")

@@ -11,27 +11,35 @@ import (
 func TestStateQuery(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, store := NewTestAgent(t)
 
 	// 初始状态
-	if agent.GetPhase() != types.PhaseCollecting {
-		t.Errorf("初始阶段应为 collecting，实际为 %s", agent.GetPhase())
+	initialSnapshot, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取初始状态失败: %v", err)
+	}
+	if initialSnapshot.Phase != types.PhaseCollecting {
+		t.Errorf("初始阶段应为 collecting，实际为 %s", initialSnapshot.Phase)
 	}
 
-	initialState := agent.GetCurrentState()
+	initialState := initialSnapshot.FormState
 	if initialState.Name != "" || initialState.Email != "" || initialState.Age != 0 {
 		t.Errorf("初始状态应为空，实际为 %+v", initialState)
 	}
 
-	t.Logf("初始阶段: %s", agent.GetPhase())
+	t.Logf("初始阶段: %s", initialSnapshot.Phase)
 	t.Logf("初始表单: %+v", initialState)
 
 	// 填写部分信息
 	if _, err := agent.Invoke(ctx, "我叫郑十"); err != nil {
 		t.Fatalf("填写姓名失败: %v", err)
 	}
-	phase1 := agent.GetPhase()
-	state1 := agent.GetCurrentState()
+	snapshot1, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取第一步状态失败: %v", err)
+	}
+	phase1 := snapshot1.Phase
+	state1 := snapshot1.FormState
 
 	if phase1 != types.PhaseCollecting {
 		t.Errorf("阶段应为 collecting，实际为 %s", phase1)
@@ -46,8 +54,12 @@ func TestStateQuery(t *testing.T) {
 	if _, err := agent.Invoke(ctx, "邮箱 zhengshi@testcases.com"); err != nil {
 		t.Fatalf("填写邮箱失败: %v", err)
 	}
-	phase2 := agent.GetPhase()
-	state2 := agent.GetCurrentState()
+	snapshot2, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取第二步状态失败: %v", err)
+	}
+	phase2 := snapshot2.Phase
+	state2 := snapshot2.FormState
 
 	if phase2 != types.PhaseCollecting {
 		t.Errorf("阶段应为 collecting，实际为 %s", phase2)
@@ -62,8 +74,12 @@ func TestStateQuery(t *testing.T) {
 	if _, err := agent.Invoke(ctx, "年龄 45"); err != nil {
 		t.Fatalf("填写年龄失败: %v", err)
 	}
-	phase3 := agent.GetPhase()
-	state3 := agent.GetCurrentState()
+	snapshot3, err := store.Read(ctx)
+	if err != nil {
+		t.Fatalf("读取第三步状态失败: %v", err)
+	}
+	phase3 := snapshot3.Phase
+	state3 := snapshot3.FormState
 
 	if phase3 != types.PhaseConfirming {
 		t.Errorf("阶段应为 confirming，实际为 %s", phase3)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	formagent "github.com/tbxark/formagent/agent"
 	"github.com/tbxark/formagent/types"
 )
 
@@ -11,7 +12,7 @@ import (
 func TestInitialState(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	agent := NewTestAgent(t)
+	agent, store := NewTestAgent(t)
 
 	// 从数据库或其他来源获取的初始数据
 	initialState := UserRegistrationForm{
@@ -21,8 +22,15 @@ func TestInitialState(t *testing.T) {
 
 	t.Logf("初始状态: %+v", initialState)
 
+	if err := store.Write(ctx, formagent.State[UserRegistrationForm]{
+		Phase:     types.PhaseCollecting,
+		FormState: initialState,
+	}); err != nil {
+		t.Fatalf("写入初始状态失败: %v", err)
+	}
+
 	// 使用初始状态并让用户补充缺失信息
-	resp, err := agent.InvokeWithInit(ctx, initialState, "我的邮箱是 wangwu@testcases.com")
+	resp, err := agent.Invoke(ctx, "我的邮箱是 wangwu@testcases.com")
 	if err != nil {
 		t.Fatalf("使用初始状态失败: %v", err)
 	}

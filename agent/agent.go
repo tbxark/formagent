@@ -2,9 +2,7 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components/model"
@@ -20,8 +18,7 @@ type FormAgent[T any] struct {
 	patchGenerator    patch.Generator[T]
 	dialogueGenerator dialogue.Generator[T]
 	commandParser     command.Parser
-	currentState      T
-	phase             types.Phase
+	stateStore        StateReadWriter[T]
 	allowedPaths      map[string]bool
 }
 
@@ -31,8 +28,11 @@ func NewFormAgent[T any](
 	patchGen patch.Generator[T],
 	dialogGen dialogue.Generator[T],
 	commandParser command.Parser,
+	stateStore StateReadWriter[T],
 ) (*FormAgent[T], error) {
-	var zero T
+	if stateStore == nil {
+		return nil, fmt.Errorf("state store is required")
+	}
 	allowedPaths := make(map[string]bool)
 	customPaths := spec.AllowedJSONPointers()
 	if len(customPaths) > 0 {
@@ -50,8 +50,7 @@ func NewFormAgent[T any](
 		patchGenerator:    patchGen,
 		dialogueGenerator: dialogGen,
 		commandParser:     commandParser,
-		currentState:      zero,
-		phase:             types.PhaseCollecting,
+		stateStore:        stateStore,
 		allowedPaths:      allowedPaths,
 	}
 
@@ -61,6 +60,7 @@ func NewFormAgent[T any](
 func NewToolBasedFormAgent[T any](
 	spec FormSpec[T],
 	chatModel model.ToolCallingChatModel,
+	stateStore StateReadWriter[T],
 ) (*FormAgent[T], error) {
 	parser, err := command.NewToolBasedCommandParser(chatModel)
 	if err != nil {
@@ -79,16 +79,26 @@ func NewToolBasedFormAgent[T any](
 		patchGen,
 		dialogueGen,
 		parser,
+		stateStore,
 	)
 }
 
 // Invoke 实现 Eino Runnable 接口
 func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*types.Response[T], error) {
+	state, err := a.stateStore.Read(ctx)
+	if err != nil {
+		callbacks.OnError(ctx, err)
+		return nil, err
+	}
+	if state.Phase == "" {
+		state.Phase = types.PhaseCollecting
+	}
+
 	ctx = callbacks.EnsureRunInfo(ctx, "FormAgent", "Agent")
 	ctx = callbacks.OnStart(ctx, map[string]any{
 		"input":      input,
-		"phase":      string(a.phase),
-		"form_state": a.currentState,
+		"phase":      string(state.Phase),
+		"form_state": state.FormState,
 	})
 
 	defer func() {
@@ -98,8 +108,12 @@ func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*types.Respons
 		}
 	}()
 
-	response, err := a.runInternal(ctx, input)
+	response, nextState, err := a.runInternal(ctx, input, state)
 	if err != nil {
+		callbacks.OnError(ctx, err)
+		return nil, err
+	}
+	if err := a.stateStore.Write(ctx, nextState); err != nil {
 		callbacks.OnError(ctx, err)
 		return nil, err
 	}
@@ -113,16 +127,16 @@ func (a *FormAgent[T]) Invoke(ctx context.Context, input string) (*types.Respons
 	return response, nil
 }
 
-func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Response[T], error) {
+func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state State[T]) (*types.Response[T], State[T], error) {
 	cmd, err := a.commandParser.ParseCommand(ctx, input)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false)
+		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false, state)
 	}
 	if cmd != command.None {
-		return a.handleCommand(ctx, cmd, input)
+		return a.handleCommand(ctx, cmd, input, state)
 	}
 
-	missingFields := a.spec.MissingFacts(a.currentState)
+	missingFields := a.spec.MissingFacts(state.FormState)
 	fieldGuidance := make(map[string]string)
 	for _, field := range missingFields {
 		guidance := a.spec.FieldGuide(field.JSONPointer)
@@ -133,7 +147,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 
 	patchReq := patch.Request[T]{
 		UserInput:     input,
-		CurrentState:  a.currentState,
+		CurrentState:  state.FormState,
 		AllowedPaths:  a.getAllowedPathsList(),
 		MissingFields: missingFields,
 		FieldGuidance: fieldGuidance,
@@ -141,29 +155,29 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 
 	updateArgs, err := a.patchGenerator.GeneratePatch(ctx, patchReq)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to generate patch: %w", err), input, false)
+		return a.handleError(ctx, fmt.Errorf("failed to generate patch: %w", err), input, false, state)
 	}
 
 	patchApplied := false
 	if len(updateArgs.Ops) > 0 {
-		newState, err := patch.ApplyRFC6902(a.currentState, updateArgs.Ops, a.allowedPaths)
+		newState, err := patch.ApplyRFC6902(state.FormState, updateArgs.Ops, a.allowedPaths)
 		if err != nil {
-			return a.handleError(ctx, fmt.Errorf("failed to apply patch: %w", err), input, false)
+			return a.handleError(ctx, fmt.Errorf("failed to apply patch: %w", err), input, false, state)
 		}
-		a.currentState = newState
+		state.FormState = newState
 		patchApplied = true
 	}
 
-	missingFields = a.spec.MissingFacts(a.currentState)
-	validationErrors := a.spec.ValidateFacts(a.currentState)
+	missingFields = a.spec.MissingFacts(state.FormState)
+	validationErrors := a.spec.ValidateFacts(state.FormState)
 
-	if a.phase == types.PhaseCollecting && len(missingFields) == 0 && len(validationErrors) == 0 {
-		a.phase = types.PhaseConfirming
+	if state.Phase == types.PhaseCollecting && len(missingFields) == 0 && len(validationErrors) == 0 {
+		state.Phase = types.PhaseConfirming
 	}
 
 	dialogueReq := dialogue.Request[T]{
-		CurrentState:     a.currentState,
-		Phase:            a.phase,
+		CurrentState:     state.FormState,
+		Phase:            state.Phase,
 		MissingFields:    missingFields,
 		ValidationErrors: validationErrors,
 		LastUserInput:    input,
@@ -172,77 +186,77 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string) (*types.Re
 
 	plan, err := a.dialogueGenerator.GenerateDialogue(ctx, dialogueReq)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied)
+		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied, state)
 	}
 
 	return &types.Response[T]{
 		Message:   plan.Message,
-		Phase:     a.phase,
-		FormState: a.currentState,
-		Completed: a.phase == types.PhaseSubmitted || a.phase == types.PhaseCancelled,
+		Phase:     state.Phase,
+		FormState: state.FormState,
+		Completed: state.Phase == types.PhaseSubmitted || state.Phase == types.PhaseCancelled,
 		Metadata: map[string]string{
 			"suggested_action": plan.SuggestedAction,
 		},
-	}, nil
+	}, state, nil
 }
 
-func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, input string) (*types.Response[T], error) {
+func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, input string, state State[T]) (*types.Response[T], State[T], error) {
 	var message string
 	var completed bool
 
 	switch cmd {
 	case command.Cancel:
-		a.phase = types.PhaseCancelled
+		state.Phase = types.PhaseCancelled
 		message = "表单填写已取消。"
 		completed = true
 
 	case command.Confirm:
-		if a.phase != types.PhaseConfirming {
+		if state.Phase != types.PhaseConfirming {
 			message = "请先完成所有必填字段后再确认提交。"
 		} else {
-			validationErrors := a.spec.ValidateFacts(a.currentState)
+			validationErrors := a.spec.ValidateFacts(state.FormState)
 			if len(validationErrors) > 0 {
 				message = "表单验证失败，请修正错误后再提交。"
 			} else {
-				if err := a.spec.Submit(ctx, a.currentState); err != nil {
-					return nil, fmt.Errorf("failed to submit form: %w", err)
+				if err := a.spec.Submit(ctx, state.FormState); err != nil {
+					return nil, state, fmt.Errorf("failed to submit form: %w", err)
 				}
-				a.phase = types.PhaseSubmitted
+				state.Phase = types.PhaseSubmitted
 				message = "表单已成功提交！"
 				completed = true
 			}
 		}
 
 	case command.Back:
-		if a.phase == types.PhaseConfirming {
-			a.phase = types.PhaseCollecting
+		if state.Phase == types.PhaseConfirming {
+			state.Phase = types.PhaseCollecting
 			message = "已返回编辑模式，您可以继续修改表单内容。"
 		} else {
 			message = "当前不在确认阶段，无需返回。"
 		}
 
 	default:
-		return nil, fmt.Errorf("unknown command: %s", cmd)
+		return nil, state, fmt.Errorf("unknown command: %s", cmd)
 	}
 
 	return &types.Response[T]{
 		Message:   message,
-		Phase:     a.phase,
-		FormState: a.currentState,
+		Phase:     state.Phase,
+		FormState: state.FormState,
 		Completed: completed,
 		Metadata:  map[string]string{},
-	}, nil
+	}, state, nil
 }
 
-func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool) (*types.Response[T], error) {
+func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state State[T]) (*types.Response[T], State[T], error) {
 	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
 
-	missingFields := a.spec.MissingFacts(a.currentState)
-	validationErrors := a.spec.ValidateFacts(a.currentState)
+	missingFields := a.spec.MissingFacts(state.FormState)
+	validationErrors := a.spec.ValidateFacts(state.FormState)
 
 	dialogueReq := dialogue.Request[T]{
-		CurrentState:     a.currentState,
-		Phase:            a.phase,
+		CurrentState:     state.FormState,
+		Phase:            state.Phase,
 		MissingFields:    missingFields,
 		ValidationErrors: validationErrors,
 		LastUserInput:    lastInput,
@@ -256,13 +270,13 @@ func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput str
 
 	return &types.Response[T]{
 		Message:   message,
-		Phase:     a.phase,
-		FormState: a.currentState,
+		Phase:     state.Phase,
+		FormState: state.FormState,
 		Completed: false,
 		Metadata: map[string]string{
 			"error": err.Error(),
 		},
-	}, nil
+	}, state, nil
 }
 
 func (a *FormAgent[T]) getAllowedPathsList() []string {
@@ -271,87 +285,4 @@ func (a *FormAgent[T]) getAllowedPathsList() []string {
 		paths = append(paths, path)
 	}
 	return paths
-}
-
-func (a *FormAgent[T]) CreateCheckpoint() ([]byte, error) {
-	checkpoint := types.Checkpoint[T]{
-		Version:      "1.0",
-		Phase:        a.phase,
-		FormState:    a.currentState,
-		Timestamp:    time.Now(),
-		AllowedPaths: a.getAllowedPathsList(),
-	}
-
-	data, err := json.Marshal(checkpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal checkpoint: %w", err)
-	}
-
-	return data, nil
-}
-
-// RestoreCheckpoint 从 checkpoint 恢复状态
-func (a *FormAgent[T]) RestoreCheckpoint(checkpointData []byte) error {
-	var checkpoint types.Checkpoint[T]
-	if err := json.Unmarshal(checkpointData, &checkpoint); err != nil {
-		return fmt.Errorf("failed to unmarshal checkpoint: %w", err)
-	}
-
-	if checkpoint.Version != "1.0" {
-		return fmt.Errorf("incompatible checkpoint version: %s (expected 1.0)", checkpoint.Version)
-	}
-
-	a.phase = checkpoint.Phase
-	a.currentState = checkpoint.FormState
-
-	a.allowedPaths = make(map[string]bool)
-	for _, path := range checkpoint.AllowedPaths {
-		a.allowedPaths[path] = true
-	}
-
-	return nil
-}
-
-// InvokeWithCheckpoint 从 checkpoint 恢复后执行
-func (a *FormAgent[T]) InvokeWithCheckpoint(ctx context.Context, checkpointData []byte, input string) (*types.Response[T], error) {
-	if err := a.RestoreCheckpoint(checkpointData); err != nil {
-		return nil, err
-	}
-	return a.Invoke(ctx, input)
-}
-
-// SetInitialState 设置初始状态
-func (a *FormAgent[T]) SetInitialState(initial T) error {
-	patches, err := patch.GeneratePatchesFromInitial(a.currentState, initial)
-	if err != nil {
-		return fmt.Errorf("failed to generate patches from initial values: %w", err)
-	}
-
-	if len(patches) > 0 {
-		newState, err := patch.ApplyRFC6902(a.currentState, patches, a.allowedPaths)
-		if err != nil {
-			return fmt.Errorf("failed to apply initial values: %w", err)
-		}
-		a.currentState = newState
-	}
-
-	return nil
-}
-
-// InvokeWithInit 设置初始状态后执行
-func (a *FormAgent[T]) InvokeWithInit(ctx context.Context, initial T, input string) (*types.Response[T], error) {
-	if err := a.SetInitialState(initial); err != nil {
-		return nil, err
-	}
-	return a.Invoke(ctx, input)
-}
-
-// GetCurrentState 获取当前表单状态
-func (a *FormAgent[T]) GetCurrentState() T {
-	return a.currentState
-}
-
-// GetPhase 获取当前阶段
-func (a *FormAgent[T]) GetPhase() types.Phase {
-	return a.phase
 }
