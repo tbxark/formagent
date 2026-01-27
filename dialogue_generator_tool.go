@@ -96,8 +96,7 @@ Call the generate_response tool to create a response.`,
 	}
 
 	if len(resp.ToolCalls) == 0 {
-		slog.Warn("generate dialogue tool call missing")
-		return g.generateFallbackDialogue(req), nil
+		return nil, fmt.Errorf("LLM call failed: no tool calls found")
 	}
 
 	toolCall := resp.ToolCalls[0]
@@ -108,53 +107,9 @@ Call the generate_response tool to create a response.`,
 	}
 
 	if input.Message == "" {
-		slog.Warn("generate dialogue tool message empty")
-		return g.generateFallbackDialogue(req), nil
+		return nil, fmt.Errorf("LLM call failed: message is empty")
 	}
 
 	slog.Debug("generate dialogue parsed", "message_len", len(input.Message), "has_suggested_action", input.SuggestedAction != "")
 	return &NextTurnPlan{Message: input.Message, SuggestedAction: input.SuggestedAction}, nil
-}
-
-func (g *ToolBasedDialogueGenerator[T]) generateFallbackDialogue(req DialogueRequest[T]) *NextTurnPlan {
-	var message string
-	var action string
-
-	switch req.Phase {
-	case PhaseCollecting:
-		if len(req.ValidationErrors) > 0 {
-			message = "请修正以下错误：\n"
-			for _, err := range req.ValidationErrors {
-				message += fmt.Sprintf("- %s\n", err.Message)
-			}
-			action = "修正验证错误"
-		} else if len(req.MissingFields) > 0 {
-			message = "请提供以下信息：\n"
-			for _, field := range req.MissingFields {
-				message += fmt.Sprintf("- %s\n", field.DisplayName)
-			}
-			action = "提供缺失字段"
-		} else {
-			message = "所有必填字段已完成，请确认信息是否正确。"
-			action = "确认信息"
-		}
-
-	case PhaseConfirming:
-		message = "请确认以上信息是否正确。您可以输入\"确认\"提交，或\"返回\"继续修改。"
-		action = "确认或返回"
-
-	case PhaseSubmitted:
-		message = "表单已成功提交！"
-		action = "完成"
-
-	case PhaseCancelled:
-		message = "表单填写已取消。"
-		action = "已取消"
-
-	default:
-		message = "请继续填写表单。"
-		action = "继续"
-	}
-
-	return &NextTurnPlan{Message: message, SuggestedAction: action}
 }

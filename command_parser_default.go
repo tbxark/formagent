@@ -45,3 +45,23 @@ func (p *StaticCommandParser) ParseCommand(ctx context.Context, input string) (C
 
 	return CommandNone, nil
 }
+
+type FailbackCommandParser struct {
+	parsers []CommandParser
+}
+
+func NewFailbackCommandParser(parsers ...CommandParser) *FailbackCommandParser {
+	return &FailbackCommandParser{parsers: parsers}
+}
+
+func (p *FailbackCommandParser) ParseCommand(ctx context.Context, input string) (Command, error) {
+	var lastErr error
+	for _, parser := range p.parsers {
+		cmd, err := parser.ParseCommand(ctx, input)
+		if err == nil {
+			return cmd, nil
+		}
+		lastErr = err
+	}
+	return CommandNone, lastErr
+}

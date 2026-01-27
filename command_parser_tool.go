@@ -81,8 +81,7 @@ Return:
 	}
 
 	var cmdInput parseCommandInput
-	err = json.Unmarshal([]byte(args), &cmdInput)
-	if err != nil {
+	if err := json.Unmarshal([]byte(args), &cmdInput); err != nil {
 		return CommandNone, fmt.Errorf("failed to parse tool arguments: %w", err)
 	}
 	return cmdInput.Intent, nil
