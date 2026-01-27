@@ -55,19 +55,18 @@ func NewFormAgent[T any](
 }
 
 func NewToolBasedFormAgent[T any](
-	ctx context.Context,
 	spec FormSpec[T],
 	chatModel model.ToolCallingChatModel,
 ) (*FormAgent[T], error) {
-	parser, err := NewToolBasedCommandParser(ctx, chatModel)
+	parser, err := NewToolBasedCommandParser(chatModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
 	}
-	patchGen, err := NewToolBasedPatchGenerator[T](ctx, chatModel)
+	patchGen, err := NewToolBasedPatchGenerator[T](chatModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based patch generator: %w", err)
 	}
-	dialogueGen, err := NewToolBasedDialogueGenerator[T](ctx, chatModel)
+	dialogueGen, err := NewToolBasedDialogueGenerator[T](chatModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based dialogue generator: %w", err)
 	}

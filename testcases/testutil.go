@@ -82,18 +82,18 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) *formagent.FormAgent[UserRe
 	}
 
 	if o.commandParser == nil {
-		agent, err := formagent.NewToolBasedFormAgent[UserRegistrationForm](context.Background(), &FormSpec{}, chatModel)
+		agent, err := formagent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel)
 		if err != nil {
 			t.Fatalf("创建 agent 失败: %v", err)
 		}
 		return agent
 	}
 
-	patchGen, err := formagent.NewToolBasedPatchGenerator[UserRegistrationForm](context.Background(), chatModel)
+	patchGen, err := formagent.NewToolBasedPatchGenerator[UserRegistrationForm](chatModel)
 	if err != nil {
 		t.Fatalf("创建 patch generator 失败: %v", err)
 	}
-	dialogueGen, err := formagent.NewToolBasedDialogueGenerator[UserRegistrationForm](context.Background(), chatModel)
+	dialogueGen, err := formagent.NewToolBasedDialogueGenerator[UserRegistrationForm](chatModel)
 	if err != nil {
 		t.Fatalf("创建 dialogue generator 失败: %v", err)
 	}

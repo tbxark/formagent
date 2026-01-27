@@ -2,12 +2,12 @@ package formagent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
+
+	"github.com/tbxark/formagent/structuredoutput"
 )
 
 const (
@@ -20,69 +20,45 @@ type parseCommandInput struct {
 	Explanation string  `json:"explanation,omitempty" jsonschema:"description=Brief reason"`
 }
 
-type parseCommandOutput struct {
-	Success bool `json:"success"`
-}
-
 type ToolBasedCommandParser struct {
-	chatModel model.ToolCallingChatModel
+	chain *structuredoutput.Chain[string, parseCommandInput]
 }
 
-func NewToolBasedCommandParser(ctx context.Context, chatModel model.ToolCallingChatModel) (*ToolBasedCommandParser, error) {
-	toolFunc := func(ctx context.Context, input *parseCommandInput) (*parseCommandOutput, error) {
-		return &parseCommandOutput{Success: true}, nil
-	}
-	parseTool, err := utils.InferTool(
+func NewToolBasedCommandParser(chatModel model.ToolCallingChatModel) (*ToolBasedCommandParser, error) {
+	chain, err := structuredoutput.NewChain[string, parseCommandInput](
+		chatModel,
+		buildParseCommandPrompt,
 		parseCommandToolName,
 		parseCommandToolDescription,
-		toolFunc,
 	)
 	if err != nil {
 		return nil, err
 	}
-	toolInfo, err := parseTool.Info(ctx)
-	if err != nil {
-		return nil, err
-	}
-	modelWithTools, err := chatModel.WithTools([]*schema.ToolInfo{toolInfo})
-	if err != nil {
-		return nil, err
-	}
-	return &ToolBasedCommandParser{chatModel: modelWithTools}, nil
+	return &ToolBasedCommandParser{chain: chain}, nil
 }
 
 func (p *ToolBasedCommandParser) ParseCommand(ctx context.Context, input string) (Command, error) {
-	systemPrompt := fmt.Sprintf(`You are a command intent recognizer.
-You MUST call the tool %s and provide JSON arguments that match the tool schema.
-Return:
-- cancel: user wants to cancel/quit/stop
-- confirm: user wants to confirm/submit/done
-- back: user explicitly wants to go back to edit/modify previous content
-- none: user is providing information or other actions`, parseCommandToolName)
-
-	resp, err := p.chatModel.Generate(ctx, []*schema.Message{
-		schema.SystemMessage(systemPrompt),
-		schema.UserMessage(input),
-	})
+	result, err := p.chain.Invoke(ctx, input)
 	if err != nil {
 		return CommandNone, err
 	}
+	if result == nil || result.Intent == "" {
+		return CommandNone, fmt.Errorf("empty intent returned by %s", parseCommandToolName)
+	}
+	return result.Intent, nil
+}
 
-	// 找到正确的 tool call
-	var args string
-	for _, tc := range resp.ToolCalls {
-		if tc.Function.Name == parseCommandToolName {
-			args = tc.Function.Arguments
-			break
-		}
-	}
-	if args == "" {
-		return CommandNone, fmt.Errorf("model did not call %s tool", parseCommandToolName)
-	}
+func buildParseCommandPrompt(ctx context.Context, input string) ([]*schema.Message, error) {
+	systemPrompt := fmt.Sprintf(`You classify user intent for form commands.
+Choose intent: cancel, confirm, back, none.
+- cancel: user wants to cancel/quit/stop
+- confirm: user wants to confirm/submit/done
+- back: user wants to go back to edit/modify previous content
+- none: user is providing information or other actions
+Call the %s tool with the result.`, parseCommandToolName)
 
-	var cmdInput parseCommandInput
-	if err := json.Unmarshal([]byte(args), &cmdInput); err != nil {
-		return CommandNone, fmt.Errorf("failed to parse tool arguments: %w", err)
-	}
-	return cmdInput.Intent, nil
+	return []*schema.Message{
+		schema.SystemMessage(systemPrompt),
+		schema.UserMessage(input),
+	}, nil
 }

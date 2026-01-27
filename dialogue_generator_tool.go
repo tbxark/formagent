@@ -7,8 +7,9 @@ import (
 	"log/slog"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
+
+	"github.com/tbxark/formagent/structuredoutput"
 )
 
 const (
@@ -21,49 +22,44 @@ type generateResponseInput struct {
 	SuggestedAction string `json:"suggested_action" jsonschema:"description=Brief description of what the user should do next"`
 }
 
-type generateResponseOutput struct {
-	Success bool `json:"success"`
-}
-
 type ToolBasedDialogueGenerator[T any] struct {
-	chatModel model.ToolCallingChatModel
+	chain *structuredoutput.Chain[DialogueRequest[T], generateResponseInput]
 }
 
 // NewToolBasedDialogueGenerator 创建基于工具调用的对话生成器
-func NewToolBasedDialogueGenerator[T any](ctx context.Context, chatModel model.ToolCallingChatModel) (*ToolBasedDialogueGenerator[T], error) {
-	toolFunc := func(ctx context.Context, input *generateResponseInput) (*generateResponseOutput, error) {
-		return &generateResponseOutput{Success: true}, nil
-	}
-	responseTool, err := utils.InferTool(
+func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedDialogueGenerator[T], error) {
+	chain, err := structuredoutput.NewChain[DialogueRequest[T], generateResponseInput](
+		chatModel,
+		buildDialoguePrompt[T],
 		generateResponseToolName,
 		generateResponseToolDescription,
-		toolFunc,
 	)
 	if err != nil {
 		return nil, err
 	}
-	toolInfo, err := responseTool.Info(ctx)
-	if err != nil {
-		return nil, err
-	}
-	modelWithTools, err := chatModel.WithTools([]*schema.ToolInfo{toolInfo})
-	if err != nil {
-		return nil, err
-	}
-	return &ToolBasedDialogueGenerator[T]{chatModel: modelWithTools}, nil
+	return &ToolBasedDialogueGenerator[T]{chain: chain}, nil
 }
 
 func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req DialogueRequest[T]) (*NextTurnPlan, error) {
-	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
 	slog.Debug("generate dialogue request", "phase", req.Phase, "has_input", req.LastUserInput != "", "missing_fields", len(req.MissingFields), "validation_errors", len(req.ValidationErrors))
+	result, err := g.chain.Invoke(ctx, req)
+	if err != nil {
+		slog.Error("generate dialogue model call failed", "err", err)
+		return nil, fmt.Errorf("LLM call failed: %w", err)
+	}
+	if result == nil || result.Message == "" {
+		return nil, fmt.Errorf("LLM call failed: message is empty")
+	}
 
-	systemPrompt := `You are a helpful form-filling assistant. Call the generate_response tool to create natural conversational responses.
+	slog.Debug("generate dialogue parsed", "message_len", len(result.Message), "has_suggested_action", result.SuggestedAction != "")
+	return &NextTurnPlan{Message: result.Message, SuggestedAction: result.SuggestedAction}, nil
+}
 
-Guidelines:
-- Keep responses concise but informative
-- Use natural language, not technical jargon
-- Support both Chinese and English (match the user's language)
-- Focus on guiding the user through form completion`
+func buildDialoguePrompt[T any](ctx context.Context, req DialogueRequest[T]) ([]*schema.Message, error) {
+	stateJSON, _ := json.MarshalIndent(req.CurrentState, "", "  ")
+	systemPrompt := `You are a helpful form-filling assistant.
+Keep responses concise and natural. Match the user's language.
+Call the generate_response tool with the final response.`
 
 	userPrompt := fmt.Sprintf(`Phase: %s
 
@@ -74,9 +70,7 @@ Form state:
 
 %s
 
-%s
-
-Call the generate_response tool to create a response.`,
+%s`,
 		string(req.Phase),
 		string(stateJSON),
 		formatUserInputSection(req.LastUserInput, req.PatchApplied),
@@ -84,32 +78,8 @@ Call the generate_response tool to create a response.`,
 		formatValidationErrorsSection(req.ValidationErrors),
 	)
 
-	messages := []*schema.Message{
+	return []*schema.Message{
 		schema.SystemMessage(systemPrompt),
 		schema.UserMessage(userPrompt),
-	}
-
-	resp, err := g.chatModel.Generate(ctx, messages)
-	if err != nil {
-		slog.Error("generate dialogue model call failed", "err", err)
-		return nil, fmt.Errorf("LLM call failed: %w", err)
-	}
-
-	if len(resp.ToolCalls) == 0 {
-		return nil, fmt.Errorf("LLM call failed: no tool calls found")
-	}
-
-	toolCall := resp.ToolCalls[0]
-	var input generateResponseInput
-	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &input); err != nil {
-		slog.Error("generate dialogue tool arguments unmarshal failed", "err", err)
-		return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
-	}
-
-	if input.Message == "" {
-		return nil, fmt.Errorf("LLM call failed: message is empty")
-	}
-
-	slog.Debug("generate dialogue parsed", "message_len", len(input.Message), "has_suggested_action", input.SuggestedAction != "")
-	return &NextTurnPlan{Message: input.Message, SuggestedAction: input.SuggestedAction}, nil
+	}, nil
 }
