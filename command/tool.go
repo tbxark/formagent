@@ -62,7 +62,7 @@ IMPORTANT: Always combine the assistant's question/prompt with the user's answer
 
 Choose the most appropriate intent from the allowed ones:
 - cancel: Only return this if the user explicitly expresses intent to abandon or cancel the current form filling process (e.g., "cancel", "quit", "abandon", "stop filling"). Do not interpret general negations like "no", "don't", "not" as cancel unless they clearly refer to abandoning the process in context.
-- confirm: Return this if the user explicitly expresses intent to confirm and submit the current form (e.g., "confirm", "submit", "yes, proceed", "finalize"). Do not assume confirmation from vague affirmations.
+- confirm: Only return this if the user explicitly expresses intent to confirm and submit the current form (e.g., "confirm", "submit", "yes, proceed", "finalize"). Do not interpret general affirmations like "yes", "ok", "good" as confirm unless they clearly refer to submitting the form in context.
 - edit: Return this if the user's input provides information that would change or update form data, such as filling fields, modifying values, or continuing to provide details for the form.
 - do_nothing: Return this for purely conversational input, irrelevant chatter, or responses that do not relate to form editing or the current process.
 

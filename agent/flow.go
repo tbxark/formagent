@@ -118,12 +118,6 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		input.State.FormState = newState
 		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
 	case command.DoNothing:
-		if input.State.LatestQuestion != "" {
-			return &Response[T]{
-				Message: input.State.LatestQuestion,
-				State:   input.State,
-			}, nil
-		}
 		break
 	}
 
