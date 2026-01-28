@@ -28,25 +28,13 @@ func NewFormFlow[T any](
 	commandParser command.Parser,
 	stateStore StateReadWriter[T],
 ) (*FormFlow[T], error) {
-	allowedPaths := make(map[string]bool)
-	customPaths := spec.AllowedJSONPointers()
-	if len(customPaths) > 0 {
-		for _, path := range customPaths {
-			allowedPaths[path] = true
-		}
-	} else {
-		allPaths := AllJSONPointerPaths[T]()
-		for _, path := range allPaths {
-			allowedPaths[path] = true
-		}
-	}
 	agent := &FormFlow[T]{
 		spec:              spec,
 		patchGenerator:    patchGen,
 		dialogueGenerator: dialogGen,
 		commandParser:     commandParser,
 		stateStore:        stateStore,
-		allowedPaths:      allowedPaths,
+		allowedPaths:      allowPathFromSpec(spec),
 	}
 
 	return agent, nil
@@ -103,7 +91,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *Stat
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false, state)
 	}
-	if cmd != command.None {
+	if cmd == command.Confirm || cmd == command.Cancel {
 		return a.handleCommand(ctx, cmd, state)
 	}
 
@@ -156,7 +144,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *Stat
 		PatchApplied:     patchApplied,
 	}
 
-	plan, err := a.dialogueGenerator.GenerateDialogue(ctx, dialogueReq)
+	plan, err := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied, state)
 	}
@@ -167,9 +155,6 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *Stat
 		Phase:     state.Phase,
 		FormState: state.FormState,
 		Completed: state.Phase == types.PhaseSubmitted || state.Phase == types.PhaseCancelled,
-		Metadata: map[string]string{
-			"suggested_action": plan.SuggestedAction,
-		},
 	}, state, nil
 }
 
@@ -236,7 +221,7 @@ func (a *FormFlow[T]) handleError(ctx context.Context, err error, lastInput stri
 		PatchApplied:     patchApplied,
 	}
 
-	plan, dialogueErr := a.dialogueGenerator.GenerateDialogue(ctx, dialogueReq)
+	plan, dialogueErr := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
 	if dialogueErr == nil && plan != nil {
 		message = plan.Message
 	}

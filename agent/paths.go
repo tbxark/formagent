@@ -5,7 +5,23 @@ import (
 	"strings"
 )
 
-func AllJSONPointerPaths[T any]() []string {
+func allowPathFromSpec[T any](spec FormSpec[T]) map[string]bool {
+	allowedPaths := make(map[string]bool)
+	customPaths := spec.AllowedJSONPointers()
+	if len(customPaths) > 0 {
+		for _, path := range customPaths {
+			allowedPaths[path] = true
+		}
+	} else {
+		allPaths := allJSONPointerPaths[T]()
+		for _, path := range allPaths {
+			allowedPaths[path] = true
+		}
+	}
+	return allowedPaths
+}
+
+func allJSONPointerPaths[T any]() []string {
 	var zero T
 	typ := reflect.TypeOf(zero)
 
