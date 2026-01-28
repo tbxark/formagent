@@ -11,12 +11,12 @@ import (
 )
 
 type Invoice struct {
-	Title       string    `json:"title" jsonschema:"description=报销抬头"`
-	Amount      float64   `json:"amount" jsonschema:"description=金额"`
-	Date        time.Time `json:"date" jsonschema:"description=日期"`
-	Category    string    `json:"category" jsonschema:"description=类别"`
-	Payee       string    `json:"payee" jsonschema:"description=收款人"`
-	Description string    `json:"description" jsonschema:"description=备注"`
+	Title       string    `json:"title,omitempty" jsonschema:"description=报销抬头"`
+	Amount      float64   `json:"amount,omitempty" jsonschema:"description=金额"`
+	Date        time.Time `json:"date,omitempty" jsonschema:"description=日期"`
+	Category    string    `json:"category,omitempty" jsonschema:"description=类别"`
+	Payee       string    `json:"payee,omitempty" jsonschema:"description=收款人"`
+	Description string    `json:"description,omitempty" jsonschema:"description=备注"`
 }
 
 var _ agent.FormSpec[*Invoice] = (*InvoiceFormSpec)(nil)

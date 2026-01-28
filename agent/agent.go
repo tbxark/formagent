@@ -78,7 +78,7 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 				a.manager.Submit(ctx, resp.State.FormState),
 				a.store.Remove(ctx),
 			)
-		case types.PhaseCollecting, types.PhaseConfirming:
+		case types.PhaseCollecting:
 			err = a.store.Write(ctx, resp.State)
 		case types.PhaseCancelled:
 			err = errors.Join(

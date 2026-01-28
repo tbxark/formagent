@@ -29,7 +29,7 @@ func main() {
 }
 
 func startApp(ctx context.Context, config *Config) error {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	slog.SetLogLoggerLevel(slog.LevelInfo)
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  config.APIKey,
 		Model:   config.Model,

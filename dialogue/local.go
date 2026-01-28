@@ -27,10 +27,6 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *t
 		} else {
 			message = "所有必填字段已完成，请确认信息是否正确。"
 		}
-
-	case types.PhaseConfirming:
-		message = "请确认以上信息是否正确。您可以输入\"确认\"提交，或\"返回\"继续修改。"
-
 	case types.PhaseConfirmed:
 		message = "表单已成功提交！"
 

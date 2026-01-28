@@ -11,7 +11,6 @@ type Phase string
 
 const (
 	PhaseCollecting Phase = "collecting"
-	PhaseConfirming Phase = "confirming"
 	PhaseConfirmed  Phase = "confirmed"
 	PhaseCancelled  Phase = "cancelled"
 )

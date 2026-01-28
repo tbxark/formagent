@@ -95,9 +95,13 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		return a.handleError(fmt.Errorf("failed to parse command: %w", err), input)
 	}
 	slog.Debug("Parsed command", "command", cmd, "input", input)
-	if cmd == command.Confirm || cmd == command.Cancel {
-	}
 	switch cmd {
+	case command.Confirm:
+		if len(missingFields) == 0 && len(validationErrors) == 0 {
+			return a.handleCommand(cmd, input)
+		}
+	case command.Cancel:
+		return a.handleCommand(cmd, input)
 	case command.Edit:
 		// patch
 		toolRequest.StateSchema = a.schema
@@ -113,18 +117,19 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		}
 		input.State.FormState = newState
 		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
-	case command.Confirm, command.Cancel:
-		return a.handleCommand(cmd, input)
 	case command.DoNothing:
+		if input.State.LatestQuestion != "" {
+			return &Response[T]{
+				Message: input.State.LatestQuestion,
+				State:   input.State,
+			}, nil
+		}
 		break
 	}
 
 	// dialogue
 	toolRequest.MissingFields = a.spec.MissingFacts(input.State.FormState)
 	toolRequest.ValidationErrors = a.spec.ValidateFacts(input.State.FormState)
-	if input.State.Phase == types.PhaseCollecting && len(toolRequest.MissingFields) == 0 && len(toolRequest.ValidationErrors) == 0 {
-		input.State.Phase = types.PhaseConfirming
-	}
 	slog.Debug("Generating dialogue")
 	question, err := a.dialogueGenerator.GenerateDialogue(ctx, toolRequest)
 	if err != nil {
@@ -148,21 +153,10 @@ func (a *FormFlow[T]) handleCommand(cmd command.Command, input *Request[T]) (*Re
 	switch cmd {
 	case command.Cancel:
 		resp.Message = "表单填写已取消。"
-		resp.State = &State[T]{
-			Phase: types.PhaseCancelled,
-		}
+		resp.State.Phase = types.PhaseCancelled
 	case command.Confirm:
-		if resp.State.Phase != types.PhaseConfirming {
-			resp.Message = "请先完成所有必填字段后再确认提交。"
-		} else {
-			validationErrors := a.spec.ValidateFacts(resp.State.FormState)
-			if len(validationErrors) > 0 {
-				resp.Message = "表单验证失败，请修正错误后再提交。"
-			} else {
-				resp.Message = "表单已成功提交，谢谢！"
-				resp.State.Phase = types.PhaseConfirmed
-			}
-		}
+		resp.Message = "表单已成功提交，谢谢！"
+		resp.State.Phase = types.PhaseConfirmed
 	default:
 		return resp, nil
 	}
@@ -171,7 +165,6 @@ func (a *FormFlow[T]) handleCommand(cmd command.Command, input *Request[T]) (*Re
 
 func (a *FormFlow[T]) handleError(err error, input *Request[T]) (*Response[T], error) {
 	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
-
 	return &Response[T]{
 		Message: message,
 		State:   input.State,
