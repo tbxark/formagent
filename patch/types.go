@@ -7,24 +7,24 @@ import (
 )
 
 type Operation struct {
-	Op    string `json:"op"`
-	Path  string `json:"path"`
-	Value any    `json:"value,omitempty"`
+	Op    string `json:"op" jsonschema:"enum=add,enum=replace,enum=remove,description=RFC6902 operation type (add, replace, remove)"`
+	Path  string `json:"path" jsonschema:"pattern=^/.*$,description=RFC6902 JSON Pointer, must start with '/'"`
+	Value any    `json:"value,omitempty" jsonschema:"description=Value to apply for add/replace operations (optional for remove)"`
 }
 
 type UpdateFormArgs struct {
-	Ops []Operation `json:"ops"`
+	Ops []Operation `json:"ops" jsonschema:"description=Array of RFC6902 JSON Patch operations to update the form"`
 }
 
 type Request[T any] struct {
-	UserInput     string
-	CurrentState  T
-	AllowedPaths  []string
-	MissingFields []types.FieldInfo
-
-	FieldGuidance map[string]string
+	AssistantQuestion string
+	UserAnswer        string
+	CurrentState      T
+	AllowedPaths      []string
+	MissingFields     []types.FieldInfo
+	FieldGuidance     map[string]string
 }
 
 type Generator[T any] interface {
-	GeneratePatch(ctx context.Context, req Request[T]) (UpdateFormArgs, error)
+	GeneratePatch(ctx context.Context, req *Request[T]) (*UpdateFormArgs, error)
 }

@@ -9,14 +9,15 @@ import (
 
 // State represents the agent state stored outside the agent instance.
 type State[T any] struct {
-	Phase     types.Phase
-	FormState T
+	Phase          types.Phase
+	LatestQuestion string
+	FormState      T
 }
 
 // StateReadWriter provides read/write access to state using context for routing.
 type StateReadWriter[T any] interface {
-	Read(ctx context.Context) (State[T], error)
-	Write(ctx context.Context, state State[T]) error
+	Read(ctx context.Context) (*State[T], error)
+	Write(ctx context.Context, state *State[T]) error
 }
 
 type stateKeyContext struct{}
@@ -49,16 +50,16 @@ func stateKeyOrDefault(ctx context.Context) string {
 // MemoryStateReadWriter is an in-memory implementation for testing and local usage.
 type MemoryStateReadWriter[T any] struct {
 	mu     sync.RWMutex
-	states map[string]State[T]
+	states map[string]*State[T]
 }
 
 func NewMemoryStateReadWriter[T any]() *MemoryStateReadWriter[T] {
 	return &MemoryStateReadWriter[T]{
-		states: make(map[string]State[T]),
+		states: make(map[string]*State[T]),
 	}
 }
 
-func (m *MemoryStateReadWriter[T]) Read(ctx context.Context) (State[T], error) {
+func (m *MemoryStateReadWriter[T]) Read(ctx context.Context) (*State[T], error) {
 	m.mu.RLock()
 	state, ok := m.states[stateKeyOrDefault(ctx)]
 	m.mu.RUnlock()
@@ -67,13 +68,13 @@ func (m *MemoryStateReadWriter[T]) Read(ctx context.Context) (State[T], error) {
 	}
 
 	var zero T
-	return State[T]{
+	return &State[T]{
 		Phase:     types.PhaseCollecting,
 		FormState: zero,
 	}, nil
 }
 
-func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state State[T]) error {
+func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state *State[T]) error {
 	if state.Phase == "" {
 		state.Phase = types.PhaseCollecting
 	}

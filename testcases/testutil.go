@@ -80,7 +80,7 @@ func InitChatModel(t *testing.T) *openai.ChatModel {
 	return chatModel
 }
 
-func NewTestAgent(t *testing.T, opts ...AgentOption) (*agent.FormAgent[UserRegistrationForm], *agent.MemoryStateReadWriter[UserRegistrationForm]) {
+func NewTestAgent(t *testing.T, opts ...AgentOption) (*agent.FormFlow[UserRegistrationForm], *agent.MemoryStateReadWriter[UserRegistrationForm]) {
 	chatModel := InitChatModel(t)
 	if chatModel == nil {
 		return nil, nil
@@ -98,7 +98,7 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) (*agent.FormAgent[UserRegis
 	}
 
 	if o.commandParser == nil {
-		agent, err := agent.NewToolBasedFormAgent[UserRegistrationForm](&FormSpec{}, chatModel, o.stateStore)
+		agent, err := agent.NewToolBasedFormFlow[UserRegistrationForm](&FormSpec{}, chatModel, o.stateStore)
 		if err != nil {
 			t.Fatalf("创建 agent 失败: %v", err)
 		}
@@ -113,7 +113,7 @@ func NewTestAgent(t *testing.T, opts ...AgentOption) (*agent.FormAgent[UserRegis
 	if err != nil {
 		t.Fatalf("创建 dialogue generator 失败: %v", err)
 	}
-	agent, err := agent.NewFormAgent(&FormSpec{}, patchGen, dialogueGen, o.commandParser, o.stateStore)
+	agent, err := agent.NewFormFlow(&FormSpec{}, patchGen, dialogueGen, o.commandParser, o.stateStore)
 	if err != nil {
 		t.Fatalf("创建 agent 失败: %v", err)
 	}

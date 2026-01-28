@@ -12,7 +12,7 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-type FormAgent[T any] struct {
+type FormFlow[T any] struct {
 	spec              FormSpec[T]
 	patchGenerator    patch.Generator[T]
 	dialogueGenerator dialogue.Generator[T]
@@ -21,13 +21,13 @@ type FormAgent[T any] struct {
 	allowedPaths      map[string]bool
 }
 
-func NewFormAgent[T any](
+func NewFormFlow[T any](
 	spec FormSpec[T],
 	patchGen patch.Generator[T],
 	dialogGen dialogue.Generator[T],
 	commandParser command.Parser,
 	stateStore StateReadWriter[T],
-) (*FormAgent[T], error) {
+) (*FormFlow[T], error) {
 	allowedPaths := make(map[string]bool)
 	customPaths := spec.AllowedJSONPointers()
 	if len(customPaths) > 0 {
@@ -40,7 +40,7 @@ func NewFormAgent[T any](
 			allowedPaths[path] = true
 		}
 	}
-	agent := &FormAgent[T]{
+	agent := &FormFlow[T]{
 		spec:              spec,
 		patchGenerator:    patchGen,
 		dialogueGenerator: dialogGen,
@@ -52,11 +52,11 @@ func NewFormAgent[T any](
 	return agent, nil
 }
 
-func NewToolBasedFormAgent[T any](
+func NewToolBasedFormFlow[T any](
 	spec FormSpec[T],
 	chatModel model.ToolCallingChatModel,
 	stateStore StateReadWriter[T],
-) (*FormAgent[T], error) {
+) (*FormFlow[T], error) {
 	parser, err := command.NewToolBasedCommandParser(chatModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
@@ -69,7 +69,7 @@ func NewToolBasedFormAgent[T any](
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based dialogue generator: %w", err)
 	}
-	return NewFormAgent[T](
+	return NewFormFlow[T](
 		spec,
 		patchGen,
 		dialogueGen,
@@ -78,7 +78,7 @@ func NewToolBasedFormAgent[T any](
 	)
 }
 
-func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*Response[T], error) {
+func (a *FormFlow[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*Response[T], error) {
 	state, err := a.stateStore.Read(ctx)
 	if err != nil {
 		return nil, err
@@ -98,13 +98,13 @@ func (a *FormAgent[T]) Invoke(ctx context.Context, input string, opts ...compose
 	return response, nil
 }
 
-func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state State[T]) (*Response[T], State[T], error) {
+func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *State[T]) (*Response[T], *State[T], error) {
 	cmd, err := a.commandParser.ParseCommand(ctx, input)
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false, state)
 	}
 	if cmd != command.None {
-		return a.handleCommand(ctx, cmd, input, state)
+		return a.handleCommand(ctx, cmd, state)
 	}
 
 	missingFields := a.spec.MissingFacts(state.FormState)
@@ -117,14 +117,15 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state Stat
 	}
 
 	patchReq := patch.Request[T]{
-		UserInput:     input,
-		CurrentState:  state.FormState,
-		AllowedPaths:  a.getAllowedPathsList(),
-		MissingFields: missingFields,
-		FieldGuidance: fieldGuidance,
+		AssistantQuestion: state.LatestQuestion,
+		UserAnswer:        input,
+		CurrentState:      state.FormState,
+		AllowedPaths:      a.getAllowedPathsList(),
+		MissingFields:     missingFields,
+		FieldGuidance:     fieldGuidance,
 	}
 
-	updateArgs, err := a.patchGenerator.GeneratePatch(ctx, patchReq)
+	updateArgs, err := a.patchGenerator.GeneratePatch(ctx, &patchReq)
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to generate patch: %w", err), input, false, state)
 	}
@@ -159,6 +160,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state Stat
 	if err != nil {
 		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied, state)
 	}
+	state.LatestQuestion = plan.Message
 
 	return &Response[T]{
 		Message:   plan.Message,
@@ -171,7 +173,7 @@ func (a *FormAgent[T]) runInternal(ctx context.Context, input string, state Stat
 	}, state, nil
 }
 
-func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, input string, state State[T]) (*Response[T], State[T], error) {
+func (a *FormFlow[T]) handleCommand(ctx context.Context, cmd command.Command, state *State[T]) (*Response[T], *State[T], error) {
 	var message string
 	var completed bool
 
@@ -219,7 +221,7 @@ func (a *FormAgent[T]) handleCommand(ctx context.Context, cmd command.Command, i
 	}, state, nil
 }
 
-func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state State[T]) (*Response[T], State[T], error) {
+func (a *FormFlow[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state *State[T]) (*Response[T], *State[T], error) {
 	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
 
 	missingFields := a.spec.MissingFacts(state.FormState)
@@ -250,7 +252,7 @@ func (a *FormAgent[T]) handleError(ctx context.Context, err error, lastInput str
 	}, state, nil
 }
 
-func (a *FormAgent[T]) getAllowedPathsList() []string {
+func (a *FormFlow[T]) getAllowedPathsList() []string {
 	paths := make([]string, 0, len(a.allowedPaths))
 	for path := range a.allowedPaths {
 		paths = append(paths, path)

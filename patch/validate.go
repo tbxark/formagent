@@ -9,73 +9,10 @@ func ValidatePatchOperations(ops []Operation, allowedPaths map[string]bool) erro
 	if len(ops) == 0 {
 		return nil
 	}
-
 	for i, op := range ops {
-		if err := validateOp(op.Op); err != nil {
-			return fmt.Errorf("operation %d: %w", i, err)
-		}
-
-		if err := validateJSONPointer(op.Path); err != nil {
-			return fmt.Errorf("operation %d: %w", i, err)
-		}
-
 		if err := validatePathAllowed(op.Path, allowedPaths); err != nil {
 			return fmt.Errorf("operation %d: %w", i, err)
 		}
-
-		if (op.Op == "add" || op.Op == "replace") && op.Value == nil {
-			return fmt.Errorf("operation %d: %s operation requires a value", i, op.Op)
-		}
-	}
-
-	return nil
-}
-
-func validateOp(op string) error {
-	switch op {
-	case "add", "replace", "remove":
-		return nil
-	default:
-		return fmt.Errorf("invalid operation type %q: must be one of 'add', 'replace', or 'remove'", op)
-	}
-}
-
-func validateJSONPointer(path string) error {
-	if path == "" {
-		return fmt.Errorf("path cannot be empty: must start with '/'")
-	}
-	if path[0] != '/' {
-		return fmt.Errorf("invalid JSON Pointer %q: must start with '/'", path)
-	}
-
-	tokens := strings.Split(path[1:], "/")
-	for i, token := range tokens {
-		if strings.Contains(token, "~") {
-			if err := validateEscapeSequences(token); err != nil {
-				return fmt.Errorf("invalid JSON Pointer %q at token %d: %w", path, i, err)
-			}
-		}
-	}
-
-	return nil
-}
-
-func validateEscapeSequences(token string) error {
-	i := 0
-	for i < len(token) {
-		if token[i] == '~' {
-			if i+1 >= len(token) {
-				return fmt.Errorf("invalid escape sequence: '~' at end of token")
-			}
-
-			next := token[i+1]
-			if next != '0' && next != '1' {
-				return fmt.Errorf("invalid escape sequence: '~%c' (must be '~0' or '~1')", next)
-			}
-			i += 2
-			continue
-		}
-		i++
 	}
 	return nil
 }

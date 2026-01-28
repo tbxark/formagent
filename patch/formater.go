@@ -25,7 +25,7 @@ func formatMissingFieldsSection(fields []types.FieldInfo) string {
 	if len(fields) == 0 {
 		return ""
 	}
-	result := "Missing required fields:\n"
+	result := "# Missing required fields:\n"
 	for _, field := range fields {
 		result += fmt.Sprintf("- %s [%s]", field.DisplayName, field.JSONPointer)
 		if field.Description != "" {
@@ -45,7 +45,7 @@ func formatFieldGuidanceSection(guidance map[string]string) string {
 		keys = append(keys, path)
 	}
 	sort.Strings(keys)
-	result := "Field guidance:\n"
+	result := "# Field guidance:\n"
 	for _, path := range keys {
 		result += fmt.Sprintf("- %s: %s\n", path, guidance[path])
 	}
