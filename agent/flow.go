@@ -78,12 +78,9 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	missingFields := a.spec.MissingFacts(input.State.FormState)
 	validationErrors := a.spec.ValidateFacts(input.State.FormState)
 	toolRequest := &types.ToolRequest[T]{
-		State: input.State.FormState,
-		Phase: input.State.Phase,
-		MessagePair: types.MessagePair{
-			Question: input.State.LatestQuestion,
-			Answer:   input.UserInput,
-		},
+		State:            input.State.FormState,
+		Phase:            input.State.Phase,
+		Messages:         input.ChatHistory,
 		MissingFields:    missingFields,
 		ValidationErrors: validationErrors,
 	}

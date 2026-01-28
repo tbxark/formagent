@@ -20,7 +20,10 @@ func NewLocalCommandParser[T any]() *LocalCommandParser[T] {
 }
 
 func (p *LocalCommandParser[T]) ParseCommand(ctx context.Context, req *types.ToolRequest[T]) (Command, error) {
-	normalized := strings.ToLower(strings.TrimSpace(req.MessagePair.Answer))
+	if len(req.Messages) == 0 {
+		return DoNothing, nil
+	}
+	normalized := strings.ToLower(strings.TrimSpace(req.Messages[len(req.Messages)-1].Content))
 	for _, keyword := range p.CancelKeywords {
 		if normalized == keyword {
 			return Cancel, nil

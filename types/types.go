@@ -1,11 +1,6 @@
 package types
 
-import (
-	"encoding/json"
-	"fmt"
-	"strings"
-	"time"
-)
+import "github.com/cloudwego/eino/schema"
 
 type Phase string
 
@@ -22,16 +17,11 @@ type FieldInfo struct {
 	Required    bool   `json:"required"`
 }
 
-type MessagePair struct {
-	Question string `json:"question,omitempty"`
-	Answer   string `json:"answer,omitempty"`
-}
-
 type ToolRequest[T any] struct {
 	State       T
 	StateSchema string
 	Phase       Phase
-	MessagePair MessagePair
+	Messages    []*schema.Message
 
 	MissingFields    []FieldInfo
 	ValidationErrors []FieldInfo

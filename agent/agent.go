@@ -63,8 +63,8 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			return
 		}
 		resp, err := a.flow.Invoke(ctx, &Request[T]{
-			State:     state,
-			UserInput: input.Messages[len(input.Messages)-1].Content,
+			State:       state,
+			ChatHistory: input.Messages,
 		})
 		if err != nil {
 			gen.Send(&adk.AgentEvent{
