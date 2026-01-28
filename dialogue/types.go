@@ -7,8 +7,7 @@ import (
 )
 
 type NextTurnPlan struct {
-	Message         string `json:"message"`
-	SuggestedAction string `json:"suggested_action,omitempty"`
+	Message string `json:"message" jsonschema:"required,description=Natural conversational response to the user"`
 }
 
 type Request[T any] struct {
@@ -23,5 +22,5 @@ type Request[T any] struct {
 }
 
 type Generator[T any] interface {
-	GenerateDialogue(ctx context.Context, req Request[T]) (*NextTurnPlan, error)
+	GenerateDialogue(ctx context.Context, req *Request[T]) (*NextTurnPlan, error)
 }
