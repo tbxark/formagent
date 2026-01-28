@@ -52,7 +52,7 @@ func (g *ToolBasedDialogueGenerator[T]) GenerateDialogueStream(ctx context.Conte
 
 func (g *ToolBasedDialogueGenerator[T]) buildDialoguePrompt(req *types.ToolRequest[T]) ([]*schema.Message, error) {
 
-	message, err := req.ToPromptMessage()
+	message, err := types.FormatToolRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("convert to prompt message failed: %w", err)
 	}

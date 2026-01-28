@@ -44,7 +44,7 @@ func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *typ
 }
 
 func buildPatchPrompt[T any](ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
-	msg, err := req.ToPromptMessage()
+	message, err := types.FormatToolRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("convert to prompt message failed: %w", err)
 	}
@@ -95,6 +95,6 @@ Context:
 
 	return []*einoSchema.Message{
 		einoSchema.SystemMessage(systemPrompt),
-		einoSchema.UserMessage(msg),
+		einoSchema.UserMessage(message),
 	}, nil
 }

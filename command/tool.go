@@ -49,7 +49,7 @@ func (p *ToolBasedCommandParser[T]) ParseCommand(ctx context.Context, req *types
 }
 
 func buildParseCommandPrompt[T any](ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
-	message, err := req.ToPromptMessage()
+	message, err := types.FormatToolRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("convert to prompt message failed: %w", err)
 	}
