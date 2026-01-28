@@ -51,7 +51,13 @@ func buildPatchPrompt[T any](ctx context.Context, req *Request[T]) ([]*einoSchem
 		return nil, fmt.Errorf("marshal form state: %w", err)
 	}
 
-	systemPrompt := fmt.Sprintf("You are a form assistant. Analyze user input and call `%s` to generate RFC6902 JSON Patch operations. Rules: only use explicit user info; use replace for updates and add for new fields; if nothing to extract, return empty operations. The form schema is provided below, and the form is currently being edited, so ignore required fields for now.", updateFormToolName)
+	systemPrompt := fmt.Sprintf(`You are a form assistant. Analyze user input and call '%s' to generate RFC6902 JSON Patch operations.
+
+Rules:
+- only use explicit user info;
+- use replace for updates and add for new fields;
+- if nothing to extract, return empty operations.
+- The form schema is provided below, and the form is currently being edited, so ignore required fields for now.`, updateFormToolName)
 
 	sections := []string{
 		fmt.Sprintf("# Form state schema JSON:\n```json\n%s\n```", req.StateSchema),

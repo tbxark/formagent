@@ -57,10 +57,7 @@ func NewToolBasedFormFlow[T any](
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based patch generator: %w", err)
 	}
-	dialogueGen, err := dialogue.NewToolBasedDialogueGenerator[T](chatModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tool-based dialogue generator: %w", err)
-	}
+	dialogueGen := dialogue.NewToolBasedDialogueGenerator[T](chatModel)
 	return NewFormFlow[T](
 		spec,
 		manager,
@@ -75,7 +72,6 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 	if input.State.Phase == "" {
 		input.State.Phase = types.PhaseCollecting
 	}
-	slog.Debug("Loaded state", "state", input.State.FormState)
 	response, err := a.runInternal(ctx, input)
 	if err != nil {
 		return nil, err
@@ -86,7 +82,7 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Response[T], error) {
 
 	// command
-
+	slog.Debug("Loaded state", "state", input.State.FormState)
 	cmd, err := a.commandParser.ParseCommand(ctx, input.UserInput)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to parse command: %w", err), input)
@@ -130,14 +126,16 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		ValidationErrors: validationErrors,
 	}
 
-	plan, err := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
+	slog.Debug("Generating dialogue", "request", dialogueReq)
+	question, err := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to generate dialogue: %w", err), input)
 	}
-	input.State.LatestQuestion = plan.Message
+	input.State.LatestQuestion = question
+	slog.Debug("Generated dialogue", "question", question)
 
 	return &Response[T]{
-		Message: plan.Message,
+		Message: question,
 		State:   input.State,
 	}, nil
 }

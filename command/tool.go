@@ -55,7 +55,7 @@ Choose intent: cancel, confirm, back, none.
 - confirm: user wants to confirm/submit/done
 - back: user wants to go back to edit/modify previous content
 - none: user is providing information or other actions
-Call the %s tool with the result.`, parseCommandToolName)
+Call the '%s' tool with the result.`, parseCommandToolName)
 
 	return []*schema.Message{
 		schema.SystemMessage(systemPrompt),

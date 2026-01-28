@@ -8,7 +8,6 @@ import (
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
-	"github.com/tbxark/formagent/structured"
 )
 
 const (
@@ -17,46 +16,64 @@ const (
 )
 
 type ToolBasedDialogueGenerator[T any] struct {
-	chain *structured.Chain[*Request[T], NextTurnPlan]
+	Lang      string
+	chatModel model.ToolCallingChatModel
 }
 
-func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedDialogueGenerator[T], error) {
-	chain, err := structured.NewChain[*Request[T], NextTurnPlan](
-		chatModel,
-		buildDialoguePrompt[T],
-		generateResponseToolName,
-		generateResponseToolDescription,
-	)
+func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) *ToolBasedDialogueGenerator[T] {
+	return &ToolBasedDialogueGenerator[T]{
+		Lang:      "Simplified Chinese",
+		chatModel: chatModel,
+	}
+}
+
+func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (string, error) {
+	messages, err := g.buildDialoguePrompt(req)
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("build dialogue prompt: %w", err)
 	}
-	return &ToolBasedDialogueGenerator[T]{chain: chain}, nil
-}
 
-func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (*NextTurnPlan, error) {
-	result, err := g.chain.Invoke(ctx, req)
+	response, err := g.chatModel.Generate(ctx, messages)
 	if err != nil {
-		return nil, fmt.Errorf("LLM call failed: %w", err)
+		return "", fmt.Errorf("LLM call failed: %w", err)
 	}
-	if result == nil || result.Message == "" {
-		return nil, fmt.Errorf("LLM call failed: message is empty")
-	}
-
-	return result, nil
+	return response.Content, nil
 }
 
-func buildDialoguePrompt[T any](ctx context.Context, req *Request[T]) ([]*schema.Message, error) {
+func (g *ToolBasedDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error) {
+	messages, err := g.buildDialoguePrompt(req)
+	if err != nil {
+		return nil, fmt.Errorf("build dialogue prompt: %w", err)
+	}
+
+	stream, err := g.chatModel.Stream(ctx, messages)
+	if err != nil {
+		return nil, fmt.Errorf("LLM stream call failed: %w", err)
+	}
+	textStream := schema.StreamReaderWithConvert[*schema.Message, string](stream, func(message *schema.Message) (string, error) {
+		return message.Content, nil
+	})
+	return textStream, nil
+}
+
+func (g *ToolBasedDialogueGenerator[T]) buildDialoguePrompt(req *Request[T]) ([]*schema.Message, error) {
 	stateJSON, err := json.Marshal(req.CurrentState)
 	if err != nil {
 		return nil, fmt.Errorf("marshal form state: %w", err)
 	}
-	systemPrompt := "You are a helpful form assistant. Keep responses concise and natural. Match the user's language. Call the `generate_response` tool with the final response."
+	systemPrompt := fmt.Sprintf(`You are a friendly form assistant. Engage in natural, conversational dialogue to guide users through form completion.
+
+Respond as if chatting with a friend:
+- ask questions casually, acknowledge what they've filled out, and gently prompt for missing information.
+- Avoid lists or bullet points; make it feel like a real conversation.
+- Reply in %s.
+- Always call the '%s' tool with your final response.`, g.Lang, generateResponseToolName)
 
 	sections := []string{
 		fmt.Sprintf("# Phase:\n %s", req.Phase),
 		fmt.Sprintf("# Form state JSON:\n```json\n%s\n```", string(stateJSON)),
 	}
-	if s := formatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase); s != "" {
+	if s := formatMissingFieldsSectionForDialogue(req.MissingFields); s != "" {
 		sections = append(sections, s)
 	}
 	if s := formatValidationErrorsSection(req.ValidationErrors); s != "" {

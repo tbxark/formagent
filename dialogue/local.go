@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/types"
 )
 
 type LocalDialogueGenerator[T any] struct{}
 
-func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (*NextTurnPlan, error) {
+func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (string, error) {
 	var message string
 	switch req.Phase {
 	case types.PhaseCollecting:
@@ -39,7 +40,16 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *R
 	default:
 		message = "请继续填写表单。"
 	}
-	return &NextTurnPlan{Message: message}, nil
+	return message, nil
+}
+
+func (g *LocalDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error) {
+	message, err := g.GenerateDialogue(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	stream := schema.StreamReaderFromArray([]string{message})
+	return stream, nil
 }
 
 type FailbackDialogueGenerator[T any] struct {
@@ -50,12 +60,24 @@ func NewFailbackDialogueGenerator[T any](generators ...Generator[T]) *FailbackDi
 	return &FailbackDialogueGenerator[T]{generators: generators}
 }
 
-func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (*NextTurnPlan, error) {
+func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (string, error) {
 	var lastErr error
 	for _, generator := range g.generators {
 		plan, err := generator.GenerateDialogue(ctx, req)
 		if err == nil {
 			return plan, nil
+		}
+		lastErr = err
+	}
+	return "", fmt.Errorf("all dialogue generators failed: %w", lastErr)
+}
+
+func (g *FailbackDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error) {
+	var lastErr error
+	for _, generator := range g.generators {
+		stream, err := generator.GenerateDialogueStream(ctx, req)
+		if err == nil {
+			return stream, nil
 		}
 		lastErr = err
 	}

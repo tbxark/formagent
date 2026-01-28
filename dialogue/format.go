@@ -8,7 +8,7 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo, phase types.Phase) string {
+func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo) string {
 	if len(fields) == 0 {
 		return ""
 	}
