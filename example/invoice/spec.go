@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/eino-contrib/jsonschema"
 	"github.com/tbxark/formagent/agent"
@@ -10,12 +11,12 @@ import (
 )
 
 type Invoice struct {
-	Title       string  `json:"title" jsonschema:"description=报销抬头"`
-	Amount      float64 `json:"amount" jsonschema:"description=金额"`
-	Date        string  `json:"date" jsonschema:"description=日期，格式为 YYYY-MM-DD"`
-	Category    string  `json:"category" jsonschema:"description=类别"`
-	Payee       string  `json:"payee" jsonschema:"description=收款人"`
-	Description string  `json:"description" jsonschema:"description=备注"`
+	Title       string    `json:"title" jsonschema:"description=报销抬头"`
+	Amount      float64   `json:"amount" jsonschema:"description=金额"`
+	Date        time.Time `json:"date" jsonschema:"description=日期"`
+	Category    string    `json:"category" jsonschema:"description=类别"`
+	Payee       string    `json:"payee" jsonschema:"description=收款人"`
+	Description string    `json:"description" jsonschema:"description=备注"`
 }
 
 var _ agent.FormSpec[*Invoice] = (*InvoiceFormSpec)(nil)
@@ -50,7 +51,7 @@ func (InvoiceFormSpec) MissingFacts(current *Invoice) []types.FieldInfo {
 			Required:    true,
 		})
 	}
-	if current.Date == "" {
+	if current.Date.Unix() == 0 {
 		missing = append(missing, types.FieldInfo{
 			JSONPointer: "/date",
 			DisplayName: "日期",
@@ -81,13 +82,6 @@ func (InvoiceFormSpec) ValidateFacts(current *Invoice) []types.FieldInfo {
 		errs = append(errs, types.FieldInfo{
 			JSONPointer: "/amount",
 			Description: "金额不能为负数",
-		})
-	}
-	// 简单日期格式校验
-	if len(current.Date) != 10 {
-		errs = append(errs, types.FieldInfo{
-			JSONPointer: "/date",
-			Description: "日期格式应为 YYYY-MM-DD",
 		})
 	}
 	return errs

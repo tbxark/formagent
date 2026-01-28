@@ -1,15 +1,20 @@
 package command
 
-import "context"
+import (
+	"context"
+
+	"github.com/tbxark/formagent/types"
+)
 
 type Command string
 
 const (
-	Cancel  Command = "cancel"
-	Confirm Command = "confirm"
-	None    Command = "none"
+	Cancel    Command = "cancel"
+	Confirm   Command = "confirm"
+	Edit      Command = "edit"
+	DoNothing Command = "do_nothing"
 )
 
-type Parser interface {
-	ParseCommand(ctx context.Context, input string) (Command, error)
+type Parser[T any] interface {
+	ParseCommand(ctx context.Context, req *types.ToolRequest[T]) (Command, error)
 }

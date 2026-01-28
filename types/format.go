@@ -1,14 +1,13 @@
-package dialogue
+package types
 
 import (
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/renderer"
-	"github.com/tbxark/formagent/types"
 )
 
-func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo) string {
+func formatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
 	if len(fields) == 0 {
 		return ""
 	}
@@ -23,7 +22,7 @@ func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo) string {
 	return buf.String()
 }
 
-func formatValidationErrorsSection(errors []types.FieldInfo) string {
+func formatValidationErrorsSection(errors []FieldInfo) string {
 	if len(errors) == 0 {
 		return ""
 	}

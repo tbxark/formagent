@@ -7,15 +7,7 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-type Request[T any] struct {
-	CurrentState T
-	Phase        types.Phase
-
-	MissingFields    []types.FieldInfo
-	ValidationErrors []types.FieldInfo
-}
-
 type Generator[T any] interface {
-	GenerateDialogue(ctx context.Context, req *Request[T]) (string, error)
-	GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error)
+	GenerateDialogue(ctx context.Context, req *types.ToolRequest[T]) (string, error)
+	GenerateDialogueStream(ctx context.Context, req *types.ToolRequest[T]) (*schema.StreamReader[string], error)
 }

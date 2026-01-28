@@ -10,7 +10,7 @@ import (
 
 type LocalDialogueGenerator[T any] struct{}
 
-func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (string, error) {
+func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *types.ToolRequest[T]) (string, error) {
 	var message string
 	switch req.Phase {
 	case types.PhaseCollecting:
@@ -43,7 +43,7 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *R
 	return message, nil
 }
 
-func (g *LocalDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error) {
+func (g *LocalDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *types.ToolRequest[T]) (*schema.StreamReader[string], error) {
 	message, err := g.GenerateDialogue(ctx, req)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func NewFailbackDialogueGenerator[T any](generators ...Generator[T]) *FailbackDi
 	return &FailbackDialogueGenerator[T]{generators: generators}
 }
 
-func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (string, error) {
+func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *types.ToolRequest[T]) (string, error) {
 	var lastErr error
 	for _, generator := range g.generators {
 		plan, err := generator.GenerateDialogue(ctx, req)
@@ -72,7 +72,7 @@ func (g *FailbackDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req
 	return "", fmt.Errorf("all dialogue generators failed: %w", lastErr)
 }
 
-func (g *FailbackDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *Request[T]) (*schema.StreamReader[string], error) {
+func (g *FailbackDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *types.ToolRequest[T]) (*schema.StreamReader[string], error) {
 	var lastErr error
 	for _, generator := range g.generators {
 		stream, err := generator.GenerateDialogueStream(ctx, req)

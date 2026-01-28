@@ -45,9 +45,7 @@ func startApp(ctx context.Context, config *Config) error {
 
 	flow, err := agent.NewToolBasedFormFlow[*Invoice](
 		&InvoiceFormSpec{},
-		manager,
 		cm,
-		store,
 	)
 	if err != nil {
 		return err

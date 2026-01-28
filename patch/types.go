@@ -2,6 +2,8 @@ package patch
 
 import (
 	"context"
+
+	"github.com/tbxark/formagent/types"
 )
 
 type Operation struct {
@@ -14,14 +16,6 @@ type UpdateFormArgs struct {
 	Ops []Operation `json:"ops" jsonschema:"description=Array of RFC6902 JSON Patch operations to update the form"`
 }
 
-type Request[T any] struct {
-	AssistantQuestion string
-	UserAnswer        string
-
-	CurrentState T
-	StateSchema  string
-}
-
 type Generator[T any] interface {
-	GeneratePatch(ctx context.Context, req *Request[T]) (*UpdateFormArgs, error)
+	GeneratePatch(ctx context.Context, req *types.ToolRequest[T]) (*UpdateFormArgs, error)
 }

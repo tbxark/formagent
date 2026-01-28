@@ -17,16 +17,14 @@ type FormFlow[T any] struct {
 	spec              FormSpec[T]
 	patchGenerator    patch.Generator[T]
 	dialogueGenerator dialogue.Generator[T]
-	commandParser     command.Parser
+	commandParser     command.Parser[T]
 }
 
 func NewFormFlow[T any](
 	spec FormSpec[T],
-	manager FormManager[T],
 	patchGen patch.Generator[T],
 	dialogGen dialogue.Generator[T],
-	commandParser command.Parser,
-	stateStore StateReadWriter[T],
+	commandParser command.Parser[T],
 ) (*FormFlow[T], error) {
 	schema, err := spec.JsonSchema()
 	if err != nil {
@@ -45,11 +43,9 @@ func NewFormFlow[T any](
 
 func NewToolBasedFormFlow[T any](
 	spec FormSpec[T],
-	manager FormManager[T],
 	chatModel model.ToolCallingChatModel,
-	stateStore StateReadWriter[T],
 ) (*FormFlow[T], error) {
-	parser, err := command.NewToolBasedCommandParser(chatModel)
+	parser, err := command.NewToolBasedCommandParser[T](chatModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
 	}
@@ -60,11 +56,9 @@ func NewToolBasedFormFlow[T any](
 	dialogueGen := dialogue.NewToolBasedDialogueGenerator[T](chatModel)
 	return NewFormFlow[T](
 		spec,
-		manager,
 		patchGen,
 		dialogueGen,
 		parser,
-		stateStore,
 	)
 }
 
@@ -81,53 +75,58 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 
 func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Response[T], error) {
 
+	missingFields := a.spec.MissingFacts(input.State.FormState)
+	validationErrors := a.spec.ValidateFacts(input.State.FormState)
+	toolRequest := &types.ToolRequest[T]{
+		State: input.State.FormState,
+		Phase: input.State.Phase,
+		MessagePair: types.MessagePair{
+			Question: input.State.LatestQuestion,
+			Answer:   input.UserInput,
+		},
+		MissingFields:    missingFields,
+		ValidationErrors: validationErrors,
+	}
+
 	// command
-	slog.Debug("Loaded state", "state", input.State.FormState)
-	cmd, err := a.commandParser.ParseCommand(ctx, input.UserInput)
+	slog.Debug("Parsing command", "request", toolRequest.State)
+	cmd, err := a.commandParser.ParseCommand(ctx, toolRequest)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to parse command: %w", err), input)
 	}
 	slog.Debug("Parsed command", "command", cmd, "input", input)
 	if cmd == command.Confirm || cmd == command.Cancel {
+	}
+	switch cmd {
+	case command.Edit:
+		// patch
+		toolRequest.StateSchema = a.schema
+		slog.Debug("Requesting patch generation")
+		updateArgs, pErr := a.patchGenerator.GeneratePatch(ctx, toolRequest)
+		if pErr != nil {
+			return a.handleError(fmt.Errorf("failed to generate patch: %w", pErr), input)
+		}
+		slog.Debug("Applying patch", "ops", updateArgs.Ops)
+		newState, pErr := patch.ApplyRFC6902(input.State.FormState, updateArgs.Ops)
+		if pErr != nil {
+			return a.handleError(fmt.Errorf("failed to apply patch: %w", pErr), input)
+		}
+		input.State.FormState = newState
+		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
+	case command.Confirm, command.Cancel:
 		return a.handleCommand(cmd, input)
+	case command.DoNothing:
+		break
 	}
-
-	// patch
-
-	patchReq := patch.Request[T]{
-		AssistantQuestion: input.State.LatestQuestion,
-		UserAnswer:        input.UserInput,
-		CurrentState:      input.State.FormState,
-		StateSchema:       a.schema,
-	}
-	updateArgs, err := a.patchGenerator.GeneratePatch(ctx, &patchReq)
-	if err != nil {
-		return a.handleError(fmt.Errorf("failed to generate patch: %w", err), input)
-	}
-	slog.Debug("Applying patch", "ops", updateArgs.Ops, "to_state", input.State.FormState)
-	newState, err := patch.ApplyRFC6902(input.State.FormState, updateArgs.Ops)
-	if err != nil {
-		return a.handleError(fmt.Errorf("failed to apply patch: %w", err), input)
-	}
-	input.State.FormState = newState
-	slog.Debug("Applied patch", "to_state", input.State.FormState)
 
 	// dialogue
-
-	missingFields := a.spec.MissingFacts(input.State.FormState)
-	validationErrors := a.spec.ValidateFacts(input.State.FormState)
-	if input.State.Phase == types.PhaseCollecting && len(missingFields) == 0 && len(validationErrors) == 0 {
+	toolRequest.MissingFields = a.spec.MissingFacts(input.State.FormState)
+	toolRequest.ValidationErrors = a.spec.ValidateFacts(input.State.FormState)
+	if input.State.Phase == types.PhaseCollecting && len(toolRequest.MissingFields) == 0 && len(toolRequest.ValidationErrors) == 0 {
 		input.State.Phase = types.PhaseConfirming
 	}
-	dialogueReq := dialogue.Request[T]{
-		CurrentState:     input.State.FormState,
-		Phase:            input.State.Phase,
-		MissingFields:    missingFields,
-		ValidationErrors: validationErrors,
-	}
-
-	slog.Debug("Generating dialogue", "request", dialogueReq)
-	question, err := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
+	slog.Debug("Generating dialogue")
+	question, err := a.dialogueGenerator.GenerateDialogue(ctx, toolRequest)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to generate dialogue: %w", err), input)
 	}
