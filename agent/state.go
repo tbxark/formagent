@@ -16,6 +16,7 @@ type State[T any] struct {
 
 // StateReadWriter provides read/write access to state using context for routing.
 type StateReadWriter[T any] interface {
+	InitState(ctx context.Context) *State[T]
 	Read(ctx context.Context) (*State[T], error)
 	Write(ctx context.Context, state *State[T]) error
 }
@@ -49,13 +50,29 @@ func stateKeyOrDefault(ctx context.Context) string {
 
 // MemoryStateReadWriter is an in-memory implementation for testing and local usage.
 type MemoryStateReadWriter[T any] struct {
-	mu     sync.RWMutex
-	states map[string]*State[T]
+	mu         sync.RWMutex
+	states     map[string]*State[T]
+	customInit func(ctx context.Context) T
 }
 
-func NewMemoryStateReadWriter[T any]() *MemoryStateReadWriter[T] {
+func NewMemoryStateReadWriter[T any](customInit func(ctx context.Context) T) *MemoryStateReadWriter[T] {
 	return &MemoryStateReadWriter[T]{
-		states: make(map[string]*State[T]),
+		states:     make(map[string]*State[T]),
+		customInit: customInit,
+	}
+}
+
+func (m *MemoryStateReadWriter[T]) InitState(ctx context.Context) *State[T] {
+	if m.customInit != nil {
+		return &State[T]{
+			Phase:     types.PhaseCollecting,
+			FormState: m.customInit(ctx),
+		}
+	}
+	var zero T
+	return &State[T]{
+		Phase:     types.PhaseCollecting,
+		FormState: zero,
 	}
 }
 
@@ -66,12 +83,7 @@ func (m *MemoryStateReadWriter[T]) Read(ctx context.Context) (*State[T], error) 
 	if ok {
 		return state, nil
 	}
-
-	var zero T
-	return &State[T]{
-		Phase:     types.PhaseCollecting,
-		FormState: zero,
-	}, nil
+	return m.InitState(ctx), nil
 }
 
 func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state *State[T]) error {

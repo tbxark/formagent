@@ -12,12 +12,12 @@ import (
 )
 
 type FormFlow[T any] struct {
+	schema            string
 	spec              FormSpec[T]
 	patchGenerator    patch.Generator[T]
 	dialogueGenerator dialogue.Generator[T]
 	commandParser     command.Parser
 	stateStore        StateReadWriter[T]
-	allowedPaths      map[string]bool
 }
 
 func NewFormFlow[T any](
@@ -27,13 +27,17 @@ func NewFormFlow[T any](
 	commandParser command.Parser,
 	stateStore StateReadWriter[T],
 ) (*FormFlow[T], error) {
+	schema, err := spec.JsonSchema()
+	if err != nil {
+		return nil, err
+	}
 	agent := &FormFlow[T]{
+		schema:            schema,
 		spec:              spec,
 		patchGenerator:    patchGen,
 		dialogueGenerator: dialogGen,
 		commandParser:     commandParser,
 		stateStore:        stateStore,
-		allowedPaths:      allowPathFromSpec(spec),
 	}
 
 	return agent, nil
@@ -88,43 +92,32 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request) (*Response[T],
 func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *State[T]) (*Response[T], *State[T], error) {
 	cmd, err := a.commandParser.ParseCommand(ctx, input)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), input, false, state)
+		return a.handleError(ctx, fmt.Errorf("failed to parse command: %w", err), state)
 	}
 	if cmd == command.Confirm || cmd == command.Cancel {
 		return a.handleCommand(ctx, cmd, state)
 	}
 
 	missingFields := a.spec.MissingFacts(state.FormState)
-	fieldGuidance := make(map[string]string)
-	for _, field := range missingFields {
-		guidance := a.spec.FieldGuide(field.JSONPointer)
-		if guidance != "" {
-			fieldGuidance[field.JSONPointer] = guidance
-		}
-	}
 
 	patchReq := patch.Request[T]{
 		AssistantQuestion: state.LatestQuestion,
 		UserAnswer:        input,
 		CurrentState:      state.FormState,
-		AllowedPaths:      a.getAllowedPathsList(),
-		MissingFields:     missingFields,
-		FieldGuidance:     fieldGuidance,
+		StateSchema:       a.schema,
 	}
 
 	updateArgs, err := a.patchGenerator.GeneratePatch(ctx, &patchReq)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to generate patch: %w", err), input, false, state)
+		return a.handleError(ctx, fmt.Errorf("failed to generate patch: %w", err), state)
 	}
 
-	patchApplied := false
 	if len(updateArgs.Ops) > 0 {
-		newState, err := patch.ApplyRFC6902(state.FormState, updateArgs.Ops, a.allowedPaths)
-		if err != nil {
-			return a.handleError(ctx, fmt.Errorf("failed to apply patch: %w", err), input, false, state)
+		newState, pErr := patch.ApplyRFC6902(state.FormState, updateArgs.Ops)
+		if pErr != nil {
+			return a.handleError(ctx, fmt.Errorf("failed to apply patch: %w", pErr), state)
 		}
 		state.FormState = newState
-		patchApplied = true
 	}
 
 	missingFields = a.spec.MissingFacts(state.FormState)
@@ -139,13 +132,11 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input string, state *Stat
 		Phase:            state.Phase,
 		MissingFields:    missingFields,
 		ValidationErrors: validationErrors,
-		LastUserInput:    input,
-		PatchApplied:     patchApplied,
 	}
 
 	plan, err := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
 	if err != nil {
-		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), input, patchApplied, state)
+		return a.handleError(ctx, fmt.Errorf("failed to generate dialogue: %w", err), state)
 	}
 	state.LatestQuestion = plan.Message
 
@@ -205,7 +196,7 @@ func (a *FormFlow[T]) handleCommand(ctx context.Context, cmd command.Command, st
 	}, state, nil
 }
 
-func (a *FormFlow[T]) handleError(ctx context.Context, err error, lastInput string, patchApplied bool, state *State[T]) (*Response[T], *State[T], error) {
+func (a *FormFlow[T]) handleError(ctx context.Context, err error, state *State[T]) (*Response[T], *State[T], error) {
 	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
 
 	missingFields := a.spec.MissingFacts(state.FormState)
@@ -216,8 +207,6 @@ func (a *FormFlow[T]) handleError(ctx context.Context, err error, lastInput stri
 		Phase:            state.Phase,
 		MissingFields:    missingFields,
 		ValidationErrors: validationErrors,
-		LastUserInput:    lastInput,
-		PatchApplied:     patchApplied,
 	}
 
 	plan, dialogueErr := a.dialogueGenerator.GenerateDialogue(ctx, &dialogueReq)
@@ -234,12 +223,4 @@ func (a *FormFlow[T]) handleError(ctx context.Context, err error, lastInput stri
 			"error": err.Error(),
 		},
 	}, state, nil
-}
-
-func (a *FormFlow[T]) getAllowedPathsList() []string {
-	paths := make([]string, 0, len(a.allowedPaths))
-	for path := range a.allowedPaths {
-		paths = append(paths, path)
-	}
-	return paths
 }

@@ -16,7 +16,7 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *R
 		if len(req.ValidationErrors) > 0 {
 			message = "请修正以下错误：\n"
 			for _, err := range req.ValidationErrors {
-				message += fmt.Sprintf("- %s\n", err.Message)
+				message += fmt.Sprintf("- %s\n", err.Description)
 			}
 		} else if len(req.MissingFields) > 0 {
 			message = "请提供以下信息：\n"

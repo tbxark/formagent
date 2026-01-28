@@ -7,12 +7,9 @@ import (
 	jsonpatch "github.com/evanphx/json-patch/v5"
 )
 
-func ApplyRFC6902[T any](current T, ops []Operation, allowedPaths map[string]bool) (T, error) {
+func ApplyRFC6902[T any](current T, ops []Operation) (T, error) {
 	var zero T
 
-	if err := ValidatePatchOperations(ops, allowedPaths); err != nil {
-		return zero, fmt.Errorf("patch validation failed: %w", err)
-	}
 	if len(ops) == 0 {
 		return current, nil
 	}

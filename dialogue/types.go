@@ -15,10 +15,7 @@ type Request[T any] struct {
 	Phase        types.Phase
 
 	MissingFields    []types.FieldInfo
-	ValidationErrors []types.ValidationError
-
-	LastUserInput string
-	PatchApplied  bool
+	ValidationErrors []types.FieldInfo
 }
 
 type Generator[T any] interface {

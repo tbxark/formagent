@@ -15,8 +15,3 @@ type FieldInfo struct {
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required"`
 }
-
-type ValidationError struct {
-	JSONPointer string `json:"json_pointer"`
-	Message     string `json:"message"`
-}

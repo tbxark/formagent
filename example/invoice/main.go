@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -18,11 +19,11 @@ func main() {
 	flag.Parse()
 	config, err := loadConfig(*conf)
 	if err != nil {
-		os.Exit(1)
+		log.Fatalf("load config: %v", err)
 	}
 	err = startApp(context.Background(), config)
 	if err != nil {
-		os.Exit(1)
+		log.Fatalf("start app: %v", err)
 	}
 }
 
@@ -35,8 +36,10 @@ func startApp(ctx context.Context, config *Config) error {
 	if err != nil {
 		return err
 	}
-	store := agent.NewMemoryStateReadWriter[Invoice]()
-	flow, err := agent.NewToolBasedFormFlow[Invoice](
+	store := agent.NewMemoryStateReadWriter[*Invoice](func(ctx context.Context) *Invoice {
+		return &Invoice{}
+	})
+	flow, err := agent.NewToolBasedFormFlow[*Invoice](
 		&InvoiceFormSpec{},
 		cm,
 		store,
@@ -76,7 +79,7 @@ func startApp(ctx context.Context, config *Config) error {
 			if mErr != nil {
 				return mErr
 			}
-			fmt.Printf("\n助手: %v\n======\n", msg)
+			fmt.Printf("\n助手: %v\n======\n", msg.Content)
 		}
 	}
 	return nil

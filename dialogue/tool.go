@@ -54,10 +54,7 @@ func buildDialoguePrompt[T any](ctx context.Context, req *Request[T]) ([]*schema
 
 	sections := []string{
 		fmt.Sprintf("# Phase:\n %s", req.Phase),
-		fmt.Sprintf("# Form state JSON:\n %s", string(stateJSON)),
-	}
-	if s := formatUserInputSection(req.LastUserInput, req.PatchApplied); s != "" {
-		sections = append(sections, s)
+		fmt.Sprintf("# Form state JSON:\n```json\n%s\n```", string(stateJSON)),
 	}
 	if s := formatMissingFieldsSectionForDialogue(req.MissingFields, req.Phase); s != "" {
 		sections = append(sections, s)
@@ -66,7 +63,6 @@ func buildDialoguePrompt[T any](ctx context.Context, req *Request[T]) ([]*schema
 		sections = append(sections, s)
 	}
 	userPrompt := strings.Join(sections, "\n\n")
-
 	return []*schema.Message{
 		schema.SystemMessage(systemPrompt),
 		schema.UserMessage(userPrompt),

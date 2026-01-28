@@ -36,8 +36,7 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 	iter, gen := adk.NewAsyncIteratorPair[*adk.AgentEvent]()
 	go func() {
 		defer func() {
-			e := recover()
-			if e != nil {
+			if e := recover(); e != nil {
 				gen.Send(&adk.AgentEvent{
 					Err: fmt.Errorf("recover from panic: %v", e),
 				})

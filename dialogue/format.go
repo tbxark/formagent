@@ -1,48 +1,39 @@
 package dialogue
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/renderer"
 	"github.com/tbxark/formagent/types"
 )
 
-func formatUserInputSection(lastInput string, patchApplied bool) string {
-	if lastInput == "" {
-		return ""
-	}
-	extracted := "no"
-	if patchApplied {
-		extracted = "yes"
-	}
-	return fmt.Sprintf("# User input:\n%s\n> extracted info: %s", lastInput, extracted)
-}
-
 func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo, phase types.Phase) string {
 	if len(fields) == 0 {
-		if phase == types.PhaseCollecting {
-			return "# Missing required fields:\n none"
-		}
 		return ""
 	}
-	result := "# Missing required fields:\n"
+	var buf strings.Builder
+	buf.WriteString("# Missing required fields:\n")
+	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
+	table.Header("Field", "Pointer", "Description")
 	for _, field := range fields {
-		result += fmt.Sprintf("- %s [%s]", field.DisplayName, field.JSONPointer)
-		if field.Description != "" {
-			result += fmt.Sprintf(": %s", field.Description)
-		}
-		result += "\n"
+		table.Append(field.DisplayName, field.JSONPointer, field.Description)
 	}
-	return strings.TrimRight(result, "\n")
+	table.Render()
+	return buf.String()
 }
 
-func formatValidationErrorsSection(errors []types.ValidationError) string {
+func formatValidationErrorsSection(errors []types.FieldInfo) string {
 	if len(errors) == 0 {
 		return ""
 	}
-	result := "# Validation errors:\n"
+	var buf strings.Builder
+	buf.WriteString("# Validation errors:\n")
+	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
+	table.Header("Pointer", "Error")
 	for _, err := range errors {
-		result += fmt.Sprintf("- %s: %s\n", err.JSONPointer, err.Message)
+		table.Append(err.JSONPointer, err.Description)
 	}
-	return strings.TrimRight(result, "\n")
+	table.Render()
+	return buf.String()
 }

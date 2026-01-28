@@ -2,8 +2,6 @@ package patch
 
 import (
 	"context"
-
-	"github.com/tbxark/formagent/types"
 )
 
 type Operation struct {
@@ -19,10 +17,9 @@ type UpdateFormArgs struct {
 type Request[T any] struct {
 	AssistantQuestion string
 	UserAnswer        string
-	CurrentState      T
-	AllowedPaths      []string
-	MissingFields     []types.FieldInfo
-	FieldGuidance     map[string]string
+
+	CurrentState T
+	StateSchema  string
 }
 
 type Generator[T any] interface {
