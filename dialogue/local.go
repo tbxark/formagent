@@ -30,7 +30,7 @@ func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *R
 	case types.PhaseConfirming:
 		message = "请确认以上信息是否正确。您可以输入\"确认\"提交，或\"返回\"继续修改。"
 
-	case types.PhaseSubmitted:
+	case types.PhaseConfirmed:
 		message = "表单已成功提交！"
 
 	case types.PhaseCancelled:

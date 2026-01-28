@@ -7,16 +7,10 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-// State represents the agent state stored outside the agent instance.
-type State[T any] struct {
-	Phase          types.Phase
-	LatestQuestion string
-	FormState      T
-}
-
 // StateReadWriter provides read/write access to state using context for routing.
 type StateReadWriter[T any] interface {
 	InitState(ctx context.Context) *State[T]
+	Remove(ctx context.Context) error
 	Read(ctx context.Context) (*State[T], error)
 	Write(ctx context.Context, state *State[T]) error
 }
@@ -92,6 +86,13 @@ func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state *State[T]) e
 	}
 	m.mu.Lock()
 	m.states[stateKeyOrDefault(ctx)] = state
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *MemoryStateReadWriter[T]) Remove(ctx context.Context) error {
+	m.mu.Lock()
+	delete(m.states, stateKeyOrDefault(ctx))
 	m.mu.Unlock()
 	return nil
 }

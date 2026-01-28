@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -28,6 +29,7 @@ func main() {
 }
 
 func startApp(ctx context.Context, config *Config) error {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  config.APIKey,
 		Model:   config.Model,
@@ -39,8 +41,11 @@ func startApp(ctx context.Context, config *Config) error {
 	store := agent.NewMemoryStateReadWriter[*Invoice](func(ctx context.Context) *Invoice {
 		return &Invoice{}
 	})
+	manager := &InvoiceFormManager{}
+
 	flow, err := agent.NewToolBasedFormFlow[*Invoice](
 		&InvoiceFormSpec{},
+		manager,
 		cm,
 		store,
 	)
@@ -51,6 +56,8 @@ func startApp(ctx context.Context, config *Config) error {
 		"InvoiceFiller",
 		"An agent that helps users fill and submit invoice forms via conversation",
 		flow,
+		store,
+		manager,
 	)
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: formAgent,

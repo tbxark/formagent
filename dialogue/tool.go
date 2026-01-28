@@ -50,7 +50,7 @@ func buildDialoguePrompt[T any](ctx context.Context, req *Request[T]) ([]*schema
 	if err != nil {
 		return nil, fmt.Errorf("marshal form state: %w", err)
 	}
-	systemPrompt := "You are a helpful form assistant. Keep responses concise and natural. Match the user's language. Call the generate_response tool with the final response."
+	systemPrompt := "You are a helpful form assistant. Keep responses concise and natural. Match the user's language. Call the `generate_response` tool with the final response."
 
 	sections := []string{
 		fmt.Sprintf("# Phase:\n %s", req.Phase),

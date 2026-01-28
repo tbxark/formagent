@@ -12,11 +12,11 @@ import (
 
 const (
 	parseCommandToolName        = "parse_command_intent"
-	parseCommandToolDescription = "Analyze user input and determine command intent: cancel, confirm, back, none."
+	parseCommandToolDescription = "Analyze user input and determine command intent: cancel, confirm, none."
 )
 
 type parseCommandInput struct {
-	Intent      Command `json:"intent" jsonschema:"required,enum=cancel,enum=confirm,enum=back,enum=none,description=The user's command intent"`
+	Intent      Command `json:"intent" jsonschema:"required,enum=cancel,enum=confirm,enum=none,description=The user's command intent"`
 	Explanation string  `json:"explanation,omitempty" jsonschema:"description=Brief reason"`
 }
 

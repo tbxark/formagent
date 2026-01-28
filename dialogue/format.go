@@ -17,9 +17,9 @@ func formatMissingFieldsSectionForDialogue(fields []types.FieldInfo, phase types
 	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
 	table.Header("Field", "Pointer", "Description")
 	for _, field := range fields {
-		table.Append(field.DisplayName, field.JSONPointer, field.Description)
+		_ = table.Append(field.DisplayName, field.JSONPointer, field.Description)
 	}
-	table.Render()
+	_ = table.Render()
 	return buf.String()
 }
 
@@ -32,8 +32,8 @@ func formatValidationErrorsSection(errors []types.FieldInfo) string {
 	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
 	table.Header("Pointer", "Error")
 	for _, err := range errors {
-		table.Append(err.JSONPointer, err.Description)
+		_ = table.Append(err.JSONPointer, err.Description)
 	}
-	table.Render()
+	_ = table.Render()
 	return buf.String()
 }

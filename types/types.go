@@ -5,7 +5,7 @@ type Phase string
 const (
 	PhaseCollecting Phase = "collecting"
 	PhaseConfirming Phase = "confirming"
-	PhaseSubmitted  Phase = "submitted"
+	PhaseConfirmed  Phase = "confirmed"
 	PhaseCancelled  Phase = "cancelled"
 )
 

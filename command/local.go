@@ -8,7 +8,6 @@ import (
 type StaticCommandParser struct {
 	CancelKeywords  []string
 	ConfirmKeywords []string
-	BackKeywords    []string
 }
 
 type DefaultCommandParser = StaticCommandParser
@@ -18,7 +17,6 @@ func NewDefaultCommandParser() *StaticCommandParser {
 	return &StaticCommandParser{
 		CancelKeywords:  []string{"取消", "cancel", "退出", "quit", "exit", "停止", "stop"},
 		ConfirmKeywords: []string{"确认", "confirm", "提交", "submit", "完成", "done", "好的", "ok", "好"},
-		BackKeywords:    []string{"返回", "back", "返回修改", "返回编辑"},
 	}
 }
 
@@ -34,12 +32,6 @@ func (p *StaticCommandParser) ParseCommand(ctx context.Context, input string) (C
 	for _, keyword := range p.ConfirmKeywords {
 		if normalized == keyword {
 			return Confirm, nil
-		}
-	}
-
-	for _, keyword := range p.BackKeywords {
-		if normalized == keyword {
-			return Back, nil
 		}
 	}
 

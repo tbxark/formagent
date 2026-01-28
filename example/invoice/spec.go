@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -97,9 +96,4 @@ func (InvoiceFormSpec) ValidateFacts(current *Invoice) []types.FieldInfo {
 func (InvoiceFormSpec) Summary(current *Invoice) string {
 	return fmt.Sprintf("报销单摘要：\n抬头：%s\n金额：%.2f 元\n日期：%s\n类别：%s\n收款人：%s\n备注：%s",
 		current.Title, current.Amount, current.Date, current.Category, current.Payee, current.Description)
-}
-
-func (InvoiceFormSpec) Submit(ctx context.Context, final *Invoice) error {
-	fmt.Printf("已提交报销单: %+v\n", final)
-	return nil
 }

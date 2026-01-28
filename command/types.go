@@ -7,7 +7,6 @@ type Command string
 const (
 	Cancel  Command = "cancel"
 	Confirm Command = "confirm"
-	Back    Command = "back"
 	None    Command = "none"
 )
 

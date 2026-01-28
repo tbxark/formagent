@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
+	"github.com/tbxark/formagent/types"
 )
 
 var _ adk.Agent = (*Agent[any])(nil)
@@ -14,13 +16,17 @@ type Agent[T any] struct {
 	name        string
 	description string
 	flow        *FormFlow[T]
+	store       StateReadWriter[T]
+	manager     FormManager[T]
 }
 
-func NewAgent[T any](name, description string, flow *FormFlow[T]) *Agent[T] {
+func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T], manager FormManager[T]) *Agent[T] {
 	return &Agent[T]{
 		name:        name,
 		description: description,
 		flow:        flow,
+		store:       store,
+		manager:     manager,
 	}
 }
 
@@ -49,7 +55,15 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			})
 			return
 		}
-		resp, err := a.flow.Invoke(ctx, &Request{
+		state, err := a.store.Read(ctx)
+		if err != nil {
+			gen.Send(&adk.AgentEvent{
+				Err: fmt.Errorf("failed to read state: %w", err),
+			})
+			return
+		}
+		resp, err := a.flow.Invoke(ctx, &Request[T]{
+			State:     state,
 			UserInput: input.Messages[len(input.Messages)-1].Content,
 		})
 		if err != nil {
@@ -57,6 +71,20 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 				Err: fmt.Errorf("flow invoke failed: %w", err),
 			})
 			return
+		}
+		switch resp.State.Phase {
+		case types.PhaseConfirmed:
+			err = errors.Join(
+				a.manager.Submit(ctx, resp.State.FormState),
+				a.store.Remove(ctx),
+			)
+		case types.PhaseCollecting, types.PhaseConfirming:
+			err = a.store.Write(ctx, resp.State)
+		case types.PhaseCancelled:
+			err = errors.Join(
+				a.manager.Cancel(ctx, resp.State.FormState),
+				a.store.Remove(ctx),
+			)
 		}
 		gen.Send(&adk.AgentEvent{
 			Output: &adk.AgentOutput{
