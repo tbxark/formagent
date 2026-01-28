@@ -1,15 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"os"
+	"strings"
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/compose"
 	"github.com/tbxark/formagent/agent"
 )
 
@@ -18,11 +18,11 @@ func main() {
 	flag.Parse()
 	config, err := loadConfig(*conf)
 	if err != nil {
-		log.Fatalf("error loading config: %v", err)
+		os.Exit(1)
 	}
 	err = startApp(context.Background(), config)
 	if err != nil {
-		log.Fatalf("error starting app: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -44,42 +44,25 @@ func startApp(ctx context.Context, config *Config) error {
 	if err != nil {
 		return err
 	}
-	formTool, err := agent.NewFormFlowInvokableTool(
-		"invoice_filler",
-		"Fill and submit invoice forms based on user input",
+	formAgent := agent.NewAgent(
+		"InvoiceFiller",
+		"An agent that helps users fill and submit invoice forms via conversation",
 		flow,
 	)
-	if err != nil {
-		return err
-	}
-	formAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "InvoiceFiller",
-		Description: "An agent that helps users fill and submit invoice forms via conversation",
-		Instruction: `You are an expert invoice assistant. Guide the user to provide all required invoice information step by step, validate the data, and submit the form using the \"invoice_filler\" tool.`,
-		Model:       cm,
-		ToolsConfig: adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: []tool.BaseTool{formTool},
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
-
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: formAgent,
 	})
-	var input string
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("欢迎使用报销助手，请输入您的需求（如：我要报销差旅费）：")
 	for {
 		fmt.Print("用户: ")
-		_, err := fmt.Scanln(&input)
+		input, err := reader.ReadString('\n')
 		if err != nil {
 			// 处理 EOF 或输入错误
 			fmt.Println("输入错误或已结束。退出。")
 			break
 		}
+		input = strings.TrimSpace(input)
 		iter := runner.Query(ctx, input)
 		for {
 			event, ok := iter.Next()
@@ -87,11 +70,11 @@ func startApp(ctx context.Context, config *Config) error {
 				break
 			}
 			if event.Err != nil {
-				log.Fatal(event.Err)
+				return event.Err
 			}
 			msg, mErr := event.Output.MessageOutput.GetMessage()
 			if mErr != nil {
-				log.Fatal(err)
+				return mErr
 			}
 			fmt.Printf("\n助手: %v\n======\n", msg)
 		}

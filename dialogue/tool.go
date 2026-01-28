@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/cloudwego/eino/components/model"
@@ -35,10 +34,8 @@ func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel) 
 }
 
 func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *Request[T]) (*NextTurnPlan, error) {
-	slog.Debug("generate dialogue request", "phase", req.Phase, "has_input", req.LastUserInput != "", "missing_fields", len(req.MissingFields), "validation_errors", len(req.ValidationErrors))
 	result, err := g.chain.Invoke(ctx, req)
 	if err != nil {
-		slog.Error("generate dialogue model call failed", "err", err)
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 	if result == nil || result.Message == "" {

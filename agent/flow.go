@@ -5,8 +5,6 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/tbxark/formagent/command"
 	"github.com/tbxark/formagent/dialogue"
 	"github.com/tbxark/formagent/patch"
@@ -244,8 +242,4 @@ func (a *FormFlow[T]) getAllowedPathsList() []string {
 		paths = append(paths, path)
 	}
 	return paths
-}
-
-func NewFormFlowInvokableTool[T any](name, description string, flow *FormFlow[T]) (tool.InvokableTool, error) {
-	return utils.InferTool(name, description, flow.Invoke)
 }

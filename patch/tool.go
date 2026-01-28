@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/cloudwego/eino/components/model"
@@ -35,24 +34,19 @@ func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel) (*T
 }
 
 func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *Request[T]) (*UpdateFormArgs, error) {
-	slog.Debug("generate patch request", "allowed_paths", len(req.AllowedPaths), "missing_fields", len(req.MissingFields), "has_guidance", len(req.FieldGuidance) > 0, "input_len", len(req.UserAnswer))
 	result, err := g.chain.Invoke(ctx, req)
 	if err != nil {
-		slog.Error("generate patch model call failed", "err", err)
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}
 	if result == nil {
-		slog.Warn("generate patch returned nil result")
 		return nil, nil
 	}
-	slog.Debug("generate patch parsed", "operations", len(result.Ops))
 
 	allowedMap := make(map[string]bool)
 	for _, path := range req.AllowedPaths {
 		allowedMap[path] = true
 	}
 	if err := ValidatePatchOperations(result.Ops, allowedMap); err != nil {
-		slog.Error("generate patch validation failed", "err", err)
 		return nil, fmt.Errorf("generated patches failed validation: %w", err)
 	}
 
