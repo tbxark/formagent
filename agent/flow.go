@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/components/tool"
+	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/tbxark/formagent/command"
 	"github.com/tbxark/formagent/dialogue"
 	"github.com/tbxark/formagent/patch"
@@ -66,7 +67,7 @@ func NewToolBasedFormFlow[T any](
 	)
 }
 
-func (a *FormFlow[T]) Invoke(ctx context.Context, input string, opts ...compose.Option) (*Response[T], error) {
+func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request) (*Response[T], error) {
 	state, err := a.stateStore.Read(ctx)
 	if err != nil {
 		return nil, err
@@ -75,7 +76,7 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input string, opts ...compose.
 		state.Phase = types.PhaseCollecting
 	}
 
-	response, nextState, err := a.runInternal(ctx, input, state)
+	response, nextState, err := a.runInternal(ctx, input.UserInput, state)
 	if err != nil {
 		return nil, err
 	}
@@ -243,4 +244,8 @@ func (a *FormFlow[T]) getAllowedPathsList() []string {
 		paths = append(paths, path)
 	}
 	return paths
+}
+
+func NewFormFlowInvokableTool[T any](name, description string, flow *FormFlow[T]) (tool.InvokableTool, error) {
+	return utils.InferTool(name, description, flow.Invoke)
 }

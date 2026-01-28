@@ -38,7 +38,7 @@ func NewChain[TInput, TOutput any](
 	}, nil
 }
 
-func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput, opts ...compose.Option) (*TOutput, error) {
+func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOutput, error) {
 	messages, err := s.promptBuilder(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("构建提示词失败: %w", err)
