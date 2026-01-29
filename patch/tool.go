@@ -3,6 +3,7 @@ package patch
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	einoSchema "github.com/cloudwego/eino/schema"
@@ -15,41 +16,9 @@ const (
 	updateFormToolDescription = "Generate RFC6902 JSON Patch operations to update form fields based on user input. Only include operations for information explicitly provided by the user."
 )
 
-type ToolBasedPatchGenerator[T any] struct {
-	chain *structured.Chain[*types.ToolRequest[T], UpdateFormArgs]
-}
-
-func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel) (*ToolBasedPatchGenerator[T], error) {
-	chain, err := structured.NewChain[*types.ToolRequest[T], UpdateFormArgs](
-		chatModel,
-		buildPatchPrompt[T],
-		updateFormToolName,
-		updateFormToolDescription,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &ToolBasedPatchGenerator[T]{chain: chain}, nil
-}
-
-func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *types.ToolRequest[T]) (*UpdateFormArgs, error) {
-	result, err := g.chain.Invoke(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("LLM call failed: %w", err)
-	}
-	if result == nil {
-		return nil, nil
-	}
-	return result, nil
-}
-
-func buildPatchPrompt[T any](ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
-	message, err := types.FormatToolRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("convert to prompt message failed: %w", err)
-	}
-
-	systemPrompt := fmt.Sprintf(`You are a form assistant. Analyze user input and call '%s' to generate RFC6902 JSON Patch operations.
+// DefaultUpdateFormSystemPromptTemplate is the default system prompt template used by
+// ToolBasedPatchGenerator. The template may contain a single "%s" placeholder for the tool name.
+const DefaultUpdateFormSystemPromptTemplate = `You are a form assistant. Analyze user input and call '%s' to generate RFC6902 JSON Patch operations.
 
 General rules:
 - Only use information explicitly provided by the user in this turn. Do not infer or guess.
@@ -91,10 +60,87 @@ RFC6902 / JSON Patch rules (MUST follow):
 Context:
 - The form schema is provided below.
 - The form is currently being edited; ignore "required" constraints for now.
-`, updateFormToolName)
+`
 
-	return []*einoSchema.Message{
-		einoSchema.SystemMessage(systemPrompt),
-		einoSchema.UserMessage(message),
-	}, nil
+type patchGeneratorOptions struct {
+	systemPrompt         string
+	systemPromptTemplate string
+}
+
+type GeneratorOption func(*patchGeneratorOptions)
+
+// WithPatchSystemPrompt overrides the system prompt used by ToolBasedPatchGenerator.
+func WithPatchSystemPrompt(systemPrompt string) GeneratorOption {
+	return func(o *patchGeneratorOptions) {
+		o.systemPrompt = systemPrompt
+	}
+}
+
+// WithPatchSystemPromptTemplate overrides the system prompt template used by ToolBasedPatchGenerator.
+// If the template contains "%s", it will be formatted with the tool name.
+func WithPatchSystemPromptTemplate(systemPromptTemplate string) GeneratorOption {
+	return func(o *patchGeneratorOptions) {
+		o.systemPromptTemplate = systemPromptTemplate
+	}
+}
+
+type ToolBasedPatchGenerator[T any] struct {
+	chain *structured.Chain[*types.ToolRequest[T], UpdateFormArgs]
+}
+
+func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption) (*ToolBasedPatchGenerator[T], error) {
+	options := patchGeneratorOptions{systemPromptTemplate: DefaultUpdateFormSystemPromptTemplate}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&options)
+		}
+	}
+
+	systemPrompt := options.systemPrompt
+	if systemPrompt == "" {
+		tpl := options.systemPromptTemplate
+		if tpl == "" {
+			tpl = DefaultUpdateFormSystemPromptTemplate
+		}
+		if strings.Contains(tpl, "%s") {
+			systemPrompt = fmt.Sprintf(tpl, updateFormToolName)
+		} else {
+			systemPrompt = tpl
+		}
+	}
+
+	chain, err := structured.NewChain[*types.ToolRequest[T], UpdateFormArgs](
+		chatModel,
+		buildPatchPromptWithSystemPrompt[T](systemPrompt),
+		updateFormToolName,
+		updateFormToolDescription,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &ToolBasedPatchGenerator[T]{chain: chain}, nil
+}
+
+func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *types.ToolRequest[T]) (*UpdateFormArgs, error) {
+	result, err := g.chain.Invoke(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("LLM call failed: %w", err)
+	}
+	if result == nil {
+		return nil, nil
+	}
+	return result, nil
+}
+
+func buildPatchPromptWithSystemPrompt[T any](systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
+	return func(ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
+		message, err := types.FormatToolRequest(req)
+		if err != nil {
+			return nil, fmt.Errorf("convert to prompt message failed: %w", err)
+		}
+		return []*einoSchema.Message{
+			einoSchema.SystemMessage(systemPrompt),
+			einoSchema.UserMessage(message),
+		}, nil
+	}
 }
