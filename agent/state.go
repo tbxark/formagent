@@ -2,29 +2,22 @@ package agent
 
 import (
 	"context"
-	"sync"
 
 	"github.com/tbxark/formagent/types"
 )
 
-// StateReadWriter provides read/write access to state using context for routing.
 type StateReadWriter[T any] interface {
-	InitState(ctx context.Context) *State[T]
-	Remove(ctx context.Context) error
-	Read(ctx context.Context) (*State[T], error)
-	Write(ctx context.Context, state *State[T]) error
+	Load(ctx context.Context) (*State[T], error)
+	Save(ctx context.Context, state *State[T]) error
+	Clear(ctx context.Context) error
 }
 
 type stateKeyContext struct{}
 
-const defaultStateKey = "default"
-
-// WithStateKey sets a routing key for state storage in the context.
 func WithStateKey(ctx context.Context, key string) context.Context {
 	return context.WithValue(ctx, stateKeyContext{}, key)
 }
 
-// StateKeyFromContext gets the routing key from the context.
 func StateKeyFromContext(ctx context.Context) (string, bool) {
 	value := ctx.Value(stateKeyContext{})
 	if value == nil {
@@ -34,65 +27,65 @@ func StateKeyFromContext(ctx context.Context) (string, bool) {
 	return key, ok
 }
 
-func stateKeyOrDefault(ctx context.Context) string {
-	key, ok := StateKeyFromContext(ctx)
-	if ok && key != "" {
-		return key
-	}
-	return defaultStateKey
+type StateStore[T any] struct {
+	state     Store[State[T]]
+	stateInit func(ctx context.Context) T
 }
 
-// MemoryStateReadWriter is an in-memory implementation for testing and local usage.
-type MemoryStateReadWriter[T any] struct {
-	mu         sync.RWMutex
-	states     map[string]*State[T]
-	customInit func(ctx context.Context) T
-}
-
-func NewMemoryStateReadWriter[T any](customInit func(ctx context.Context) T) *MemoryStateReadWriter[T] {
-	return &MemoryStateReadWriter[T]{
-		states:     make(map[string]*State[T]),
-		customInit: customInit,
+func NewStateStore[T any](
+	stateCore Cache[State[T]],
+	stateInit func(ctx context.Context) T,
+) *StateStore[T] {
+	return &StateStore[T]{
+		state:     NewCache(stateCore, "agent:state", StateKeyFromContext),
+		stateInit: stateInit,
 	}
 }
 
-func (m *MemoryStateReadWriter[T]) InitState(ctx context.Context) *State[T] {
-	if m.customInit != nil {
-		return &State[T]{
+func NewMemoryStateStore[T any](stateInit func(ctx context.Context) T) *StateStore[T] {
+	return NewStateStore[T](
+		NewMemoryCore[State[T]](),
+		stateInit,
+	)
+}
+
+func (s *StateStore[T]) InitState(ctx context.Context) State[T] {
+	if s.stateInit != nil {
+		return State[T]{
 			Phase:     types.PhaseCollecting,
-			FormState: m.customInit(ctx),
+			FormState: s.stateInit(ctx),
 		}
 	}
 	var zero T
-	return &State[T]{
+	return State[T]{
 		Phase:     types.PhaseCollecting,
 		FormState: zero,
 	}
 }
 
-func (m *MemoryStateReadWriter[T]) Read(ctx context.Context) (*State[T], error) {
-	m.mu.RLock()
-	state, ok := m.states[stateKeyOrDefault(ctx)]
-	m.mu.RUnlock()
-	if ok {
-		return state, nil
+func (s *StateStore[T]) Load(ctx context.Context) (*State[T], error) {
+	st, ok, err := s.state.Get(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return m.InitState(ctx), nil
+	if !ok {
+		st = s.InitState(ctx)
+	}
+	return &st, nil
 }
 
-func (m *MemoryStateReadWriter[T]) Write(ctx context.Context, state *State[T]) error {
+func (s *StateStore[T]) Save(ctx context.Context, state *State[T]) error {
+	if state == nil {
+		return nil
+	}
 	if state.Phase == "" {
 		state.Phase = types.PhaseCollecting
 	}
-	m.mu.Lock()
-	m.states[stateKeyOrDefault(ctx)] = state
-	m.mu.Unlock()
-	return nil
+	return s.state.Set(ctx, *state)
 }
 
-func (m *MemoryStateReadWriter[T]) Remove(ctx context.Context) error {
-	m.mu.Lock()
-	delete(m.states, stateKeyOrDefault(ctx))
-	m.mu.Unlock()
-	return nil
+func (s *StateStore[T]) Clear(ctx context.Context) error {
+	return s.state.Del(ctx)
 }
+
+var _ StateReadWriter[any] = (*StateStore[any])(nil)

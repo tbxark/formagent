@@ -2,12 +2,10 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
-	"github.com/tbxark/formagent/types"
 )
 
 var _ adk.Agent = (*Agent[any])(nil)
@@ -17,17 +15,23 @@ type Agent[T any] struct {
 	description string
 	flow        *FormFlow[T]
 	store       StateReadWriter[T]
-	manager     FormManager[T]
 }
 
-func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T], manager FormManager[T]) *Agent[T] {
-	return &Agent[T]{
+type Option[T any] func(a *Agent[T])
+
+func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T], options ...Option[T]) *Agent[T] {
+	ag := &Agent[T]{
 		name:        name,
 		description: description,
 		flow:        flow,
 		store:       store,
-		manager:     manager,
 	}
+	for _, opt := range options {
+		if opt != nil {
+			opt(ag)
+		}
+	}
+	return ag
 }
 
 func (a *Agent[T]) Name(ctx context.Context) string {
@@ -55,10 +59,10 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			})
 			return
 		}
-		state, err := a.store.Read(ctx)
+		state, err := a.store.Load(ctx)
 		if err != nil {
 			gen.Send(&adk.AgentEvent{
-				Err: fmt.Errorf("failed to read state: %w", err),
+				Err: fmt.Errorf("failed to load session: %w", err),
 			})
 			return
 		}
@@ -72,19 +76,10 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			})
 			return
 		}
-		switch resp.State.Phase {
-		case types.PhaseConfirmed:
-			err = errors.Join(
-				a.manager.Submit(ctx, resp.State.FormState),
-				a.store.Remove(ctx),
-			)
-		case types.PhaseCollecting:
-			err = a.store.Write(ctx, resp.State)
-		case types.PhaseCancelled:
-			err = errors.Join(
-				a.manager.Cancel(ctx, resp.State.FormState),
-				a.store.Remove(ctx),
-			)
+		err = a.store.Save(ctx, resp.State)
+		if err != nil {
+			gen.Send(&adk.AgentEvent{Err: err})
+			return
 		}
 		gen.Send(&adk.AgentEvent{
 			Output: &adk.AgentOutput{
@@ -93,6 +88,9 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 					Message: &schema.Message{
 						Role:    schema.Assistant,
 						Content: resp.Message,
+						Extra: map[string]any{
+							"phase": string(resp.State.Phase),
+						},
 					},
 					Role: schema.Assistant,
 				},

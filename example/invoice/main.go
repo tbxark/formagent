@@ -12,7 +12,9 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/agent"
+	"github.com/tbxark/formagent/types"
 )
 
 func main() {
@@ -30,6 +32,7 @@ func main() {
 
 func startApp(ctx context.Context, config *Config) error {
 	slog.SetLogLoggerLevel(slog.LevelInfo)
+	ctx = agent.WithStateKey(ctx, "invoice")
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  config.APIKey,
 		Model:   config.Model,
@@ -38,11 +41,10 @@ func startApp(ctx context.Context, config *Config) error {
 	if err != nil {
 		return err
 	}
-	store := agent.NewMemoryStateReadWriter[*Invoice](func(ctx context.Context) *Invoice {
+	store := agent.NewMemoryStateStore[*Invoice](func(ctx context.Context) *Invoice {
 		return &Invoice{}
 	})
-	manager := &InvoiceFormManager{}
-
+	historyStore := agent.NewMemoryHistoryStore(agent.KeepSystemLastNTrimmer{N: 50})
 	flow, err := agent.NewToolBasedFormFlow[*Invoice](
 		&InvoiceFormSpec{},
 		cm,
@@ -55,7 +57,6 @@ func startApp(ctx context.Context, config *Config) error {
 		"An agent that helps users fill and submit invoice forms via conversation",
 		flow,
 		store,
-		manager,
 	)
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: formAgent,
@@ -64,14 +65,18 @@ func startApp(ctx context.Context, config *Config) error {
 	fmt.Println("欢迎使用报销助手，请输入您的需求（如：我要报销差旅费）：")
 	for {
 		fmt.Print("用户: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			// 处理 EOF 或输入错误
+		input, rErr := reader.ReadString('\n')
+		if rErr != nil {
 			fmt.Println("输入错误或已结束。退出。")
 			break
 		}
+		chatCtx := agent.WithStateKey(ctx, "invoice")
 		input = strings.TrimSpace(input)
-		iter := runner.Query(ctx, input)
+		history, rErr := historyStore.Append(ctx, schema.UserMessage(input))
+		if rErr != nil {
+			return rErr
+		}
+		iter := runner.Run(chatCtx, history)
 		for {
 			event, ok := iter.Next()
 			if !ok {
@@ -83,6 +88,17 @@ func startApp(ctx context.Context, config *Config) error {
 			msg, mErr := event.Output.MessageOutput.GetMessage()
 			if mErr != nil {
 				return mErr
+			}
+			if _, apErr := historyStore.Append(ctx, msg); apErr != nil {
+				return apErr
+			}
+			state, mErr := store.Load(chatCtx)
+			if mErr != nil {
+				return mErr
+			}
+			if state.Phase == types.PhaseConfirmed || state.Phase == types.PhaseCancelled {
+				_ = historyStore.Clear(chatCtx)
+				_ = store.Clear(chatCtx)
 			}
 			fmt.Printf("\n助手: %v\n======\n", msg.Content)
 		}
