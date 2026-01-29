@@ -5,22 +5,24 @@ import (
 	"errors"
 )
 
+type KeyGen func(ctx context.Context) (string, bool)
+
 type Store[S any] struct {
 	core      Cache[S]
 	namespace string
-	keyFn     func(ctx context.Context) (string, bool)
+	keygen    KeyGen
 }
 
-func NewCache[S any](core Cache[S], namespace string, keyFn func(ctx context.Context) (string, bool)) Store[S] {
+func NewStore[S any](core Cache[S], namespace string, keygen KeyGen) Store[S] {
 	return Store[S]{
 		core:      core,
 		namespace: namespace,
-		keyFn:     keyFn,
+		keygen:    keygen,
 	}
 }
 
 func (c Store[S]) key(ctx context.Context) (string, bool) {
-	key, exist := c.keyFn(ctx)
+	key, exist := c.keygen(ctx)
 	if !exist {
 		return "", false
 	}

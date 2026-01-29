@@ -20,12 +20,7 @@ type FormFlow[T any] struct {
 	commandParser     command.Parser[T]
 }
 
-func NewFormFlow[T any](
-	spec FormSpec[T],
-	patchGen patch.Generator[T],
-	dialogGen dialogue.Generator[T],
-	commandParser command.Parser[T],
-) (*FormFlow[T], error) {
+func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], commandParser command.Parser[T]) (*FormFlow[T], error) {
 	schema, err := spec.JsonSchema()
 	if err != nil {
 		return nil, err

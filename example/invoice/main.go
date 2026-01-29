@@ -30,9 +30,12 @@ func main() {
 	}
 }
 
+type agentStateKey struct{}
+
 func startApp(ctx context.Context, config *Config) error {
 	slog.SetLogLoggerLevel(slog.LevelInfo)
-	ctx = agent.WithStateKey(ctx, "invoice")
+	key := agentStateKey{}
+	ctx = context.WithValue(ctx, key, "invoice")
 	cm, err := openai.NewChatModel(ctx, &openai.ChatModelConfig{
 		APIKey:  config.APIKey,
 		Model:   config.Model,
@@ -41,10 +44,31 @@ func startApp(ctx context.Context, config *Config) error {
 	if err != nil {
 		return err
 	}
-	store := agent.NewMemoryStateStore[*Invoice](func(ctx context.Context) *Invoice {
-		return &Invoice{}
+	keygen := agent.KeyGen(func(ctx context.Context) (string, bool) {
+		value := ctx.Value(key)
+		if str, ok := value.(string); ok {
+			return str, true
+		}
+		return "", false
 	})
-	historyStore := agent.NewMemoryHistoryStore(agent.KeepSystemLastNTrimmer{N: 50})
+	historyStore := agent.NewStore[[]*schema.Message](
+		agent.NewMemoryCore[[]*schema.Message](),
+		"invoice:history:",
+		keygen,
+	)
+	stateStore := agent.NewStore[*agent.State[*Invoice]](
+		agent.NewMemoryCore[*agent.State[*Invoice]](),
+		"invoice:state:",
+		keygen,
+	)
+	historyManager := agent.NewHistoryStore(historyStore)
+	stateManager := agent.NewStateStore[*Invoice](
+		stateStore,
+		func(ctx context.Context) *Invoice {
+			return &Invoice{}
+		},
+	)
+
 	flow, err := agent.NewToolBasedFormFlow[*Invoice](
 		&InvoiceFormSpec{},
 		cm,
@@ -56,7 +80,7 @@ func startApp(ctx context.Context, config *Config) error {
 		"InvoiceFiller",
 		"An agent that helps users fill and submit invoice forms via conversation",
 		flow,
-		store,
+		stateManager,
 	)
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{
 		Agent: formAgent,
@@ -70,13 +94,12 @@ func startApp(ctx context.Context, config *Config) error {
 			fmt.Println("输入错误或已结束。退出。")
 			break
 		}
-		chatCtx := agent.WithStateKey(ctx, "invoice")
 		input = strings.TrimSpace(input)
-		history, rErr := historyStore.Append(ctx, schema.UserMessage(input))
+		history, rErr := historyManager.Append(ctx, schema.UserMessage(input))
 		if rErr != nil {
 			return rErr
 		}
-		iter := runner.Run(chatCtx, history)
+		iter := runner.Run(ctx, history)
 		for {
 			event, ok := iter.Next()
 			if !ok {
@@ -89,16 +112,16 @@ func startApp(ctx context.Context, config *Config) error {
 			if mErr != nil {
 				return mErr
 			}
-			if _, apErr := historyStore.Append(ctx, msg); apErr != nil {
+			if _, apErr := historyManager.Append(ctx, msg); apErr != nil {
 				return apErr
 			}
-			state, mErr := store.Load(chatCtx)
+			state, mErr := stateManager.Load(ctx)
 			if mErr != nil {
 				return mErr
 			}
 			if state.Phase == types.PhaseConfirmed || state.Phase == types.PhaseCancelled {
-				_ = historyStore.Clear(chatCtx)
-				_ = store.Clear(chatCtx)
+				_ = historyManager.Clear(ctx)
+				_ = stateManager.Clear(ctx)
 			}
 			fmt.Printf("\n助手: %v\n======\n", msg.Content)
 		}

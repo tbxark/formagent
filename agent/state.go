@@ -12,66 +12,44 @@ type StateReadWriter[T any] interface {
 	Clear(ctx context.Context) error
 }
 
-type stateKeyContext struct{}
-
-func WithStateKey(ctx context.Context, key string) context.Context {
-	return context.WithValue(ctx, stateKeyContext{}, key)
-}
-
-func StateKeyFromContext(ctx context.Context) (string, bool) {
-	value := ctx.Value(stateKeyContext{})
-	if value == nil {
-		return "", false
-	}
-	key, ok := value.(string)
-	return key, ok
-}
-
 type StateStore[T any] struct {
-	state     Store[State[T]]
+	store     Store[*State[T]]
 	stateInit func(ctx context.Context) T
 }
 
 func NewStateStore[T any](
-	stateCore Cache[State[T]],
+	store Store[*State[T]],
 	stateInit func(ctx context.Context) T,
 ) *StateStore[T] {
 	return &StateStore[T]{
-		state:     NewCache(stateCore, "agent:state", StateKeyFromContext),
+		store:     store,
 		stateInit: stateInit,
 	}
 }
 
-func NewMemoryStateStore[T any](stateInit func(ctx context.Context) T) *StateStore[T] {
-	return NewStateStore[T](
-		NewMemoryCore[State[T]](),
-		stateInit,
-	)
-}
-
-func (s *StateStore[T]) InitState(ctx context.Context) State[T] {
+func (s *StateStore[T]) initState(ctx context.Context) *State[T] {
 	if s.stateInit != nil {
-		return State[T]{
+		return &State[T]{
 			Phase:     types.PhaseCollecting,
 			FormState: s.stateInit(ctx),
 		}
 	}
 	var zero T
-	return State[T]{
+	return &State[T]{
 		Phase:     types.PhaseCollecting,
 		FormState: zero,
 	}
 }
 
 func (s *StateStore[T]) Load(ctx context.Context) (*State[T], error) {
-	st, ok, err := s.state.Get(ctx)
+	st, ok, err := s.store.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		st = s.InitState(ctx)
+		st = s.initState(ctx)
 	}
-	return &st, nil
+	return st, nil
 }
 
 func (s *StateStore[T]) Save(ctx context.Context, state *State[T]) error {
@@ -81,11 +59,11 @@ func (s *StateStore[T]) Save(ctx context.Context, state *State[T]) error {
 	if state.Phase == "" {
 		state.Phase = types.PhaseCollecting
 	}
-	return s.state.Set(ctx, *state)
+	return s.store.Set(ctx, state)
 }
 
 func (s *StateStore[T]) Clear(ctx context.Context) error {
-	return s.state.Del(ctx)
+	return s.store.Del(ctx)
 }
 
 var _ StateReadWriter[any] = (*StateStore[any])(nil)

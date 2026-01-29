@@ -17,21 +17,13 @@ type Agent[T any] struct {
 	store       StateReadWriter[T]
 }
 
-type Option[T any] func(a *Agent[T])
-
-func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T], options ...Option[T]) *Agent[T] {
-	ag := &Agent[T]{
+func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T]) *Agent[T] {
+	return &Agent[T]{
 		name:        name,
 		description: description,
 		flow:        flow,
 		store:       store,
 	}
-	for _, opt := range options {
-		if opt != nil {
-			opt(ag)
-		}
-	}
-	return ag
 }
 
 func (a *Agent[T]) Name(ctx context.Context) string {
