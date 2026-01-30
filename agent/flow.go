@@ -121,7 +121,6 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to generate dialogue: %w", err), input)
 	}
-	input.State.LatestQuestion = question
 	slog.Debug("Generated dialogue", "question", question)
 
 	return &Response[T]{
