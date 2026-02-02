@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -35,7 +36,7 @@ func (InvoiceFormSpec) JsonSchema() (string, error) {
 	return string(schemaBytes), nil
 }
 
-func (InvoiceFormSpec) MissingFacts(current *Invoice) []types.FieldInfo {
+func (InvoiceFormSpec) MissingFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
 	var missing []types.FieldInfo
 	if current.Title == "" {
 		missing = append(missing, types.FieldInfo{
@@ -76,7 +77,7 @@ func (InvoiceFormSpec) MissingFacts(current *Invoice) []types.FieldInfo {
 	return missing
 }
 
-func (InvoiceFormSpec) ValidateFacts(current *Invoice) []types.FieldInfo {
+func (InvoiceFormSpec) ValidateFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
 	var errs []types.FieldInfo
 	if current.Amount < 0 {
 		errs = append(errs, types.FieldInfo{
@@ -87,7 +88,7 @@ func (InvoiceFormSpec) ValidateFacts(current *Invoice) []types.FieldInfo {
 	return errs
 }
 
-func (InvoiceFormSpec) Summary(current *Invoice) string {
+func (InvoiceFormSpec) Summary(ctx context.Context, current *Invoice) string {
 	return fmt.Sprintf("报销单摘要：\n抬头：%s\n金额：%.2f 元\n日期：%s\n类别：%s\n收款人：%s\n备注：%s",
 		current.Title, current.Amount, current.Date, current.Category, current.Payee, current.Description)
 }

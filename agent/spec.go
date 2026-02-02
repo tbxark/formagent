@@ -1,14 +1,16 @@
 package agent
 
 import (
+	"context"
+
 	"github.com/tbxark/formagent/types"
 )
 
 type FormSpec[T any] interface {
 	JsonSchema() (string, error)
 
-	MissingFacts(current T) []types.FieldInfo
-	ValidateFacts(current T) []types.FieldInfo
+	MissingFacts(ctx context.Context, current T) []types.FieldInfo
+	ValidateFacts(ctx context.Context, current T) []types.FieldInfo
 
-	Summary(current T) string
+	Summary(ctx context.Context, current T) string
 }

@@ -70,8 +70,8 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 
 func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Response[T], error) {
 
-	missingFields := a.spec.MissingFacts(input.State.FormState)
-	validationErrors := a.spec.ValidateFacts(input.State.FormState)
+	missingFields := a.spec.MissingFacts(ctx, input.State.FormState)
+	validationErrors := a.spec.ValidateFacts(ctx, input.State.FormState)
 	toolRequest := &types.ToolRequest[T]{
 		State:            input.State.FormState,
 		Phase:            input.State.Phase,
@@ -114,8 +114,8 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	}
 
 	// dialogue
-	toolRequest.MissingFields = a.spec.MissingFacts(input.State.FormState)
-	toolRequest.ValidationErrors = a.spec.ValidateFacts(input.State.FormState)
+	toolRequest.MissingFields = a.spec.MissingFacts(ctx, input.State.FormState)
+	toolRequest.ValidationErrors = a.spec.ValidateFacts(ctx, input.State.FormState)
 	slog.Debug("Generating dialogue")
 	question, err := a.dialogueGenerator.GenerateDialogue(ctx, toolRequest)
 	if err != nil {
