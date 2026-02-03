@@ -65,6 +65,9 @@ func FormatToolRequest[T any](req *ToolRequest[T]) (string, error) {
 		fmt.Sprintf("# Current Date: \n %s", time.Now().Format(time.RFC3339)),
 		fmt.Sprintf("# Form state JSON:\n```json\n%s\n```", string(stateJSON)),
 	}
+	if req.StateSummary != "" {
+		sections = append(sections, fmt.Sprintf("# Form state summary:\n%s", req.StateSummary))
+	}
 	if req.StateSchema != "" {
 		sections = append(sections, fmt.Sprintf("# Form state schema JSON:\n```json\n%s\n```", req.StateSchema))
 	}

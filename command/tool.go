@@ -3,7 +3,6 @@ package command
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
@@ -19,7 +18,8 @@ const (
 
 // DefaultParseCommandSystemPromptTemplate is the default system prompt template used by
 // ToolBasedCommandParser. The template may contain a single "%s" placeholder for the tool name.
-const DefaultParseCommandSystemPromptTemplate = `You are an assistant for a form-filling robot, helping to understand user input in the context of filling out forms.
+const DefaultParseCommandSystemPromptTemplate = `
+You are an assistant for a form-filling robot, helping to understand user input in the context of filling out forms.
 
 Analyze the latest communication between the user and the assistant to determine the user's intent regarding form editing.
 
@@ -31,28 +31,50 @@ Choose the most appropriate intent from the allowed ones:
 - edit: Return this if the user's input provides information that would change or update form data, such as filling fields, modifying values, or continuing to provide details for the form.
 - do_nothing: Return this for purely conversational input, irrelevant chatter, or responses that do not relate to form editing or the current process.
 
-Call the '%s' tool with the result.`
+Call the '%s' tool with the result.
+`
 
-type commandParserOptions struct {
-	systemPrompt         string
+type PromptBuilder[T any] func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error)
+
+type commandParserOptions[T any] struct {
 	systemPromptTemplate string
+	promptBuilder        PromptBuilder[T]
 }
 
-type ParserOption func(*commandParserOptions)
+type ParserOption[T any] func(*commandParserOptions[T])
 
-// WithCommandSystemPrompt overrides the system prompt used by ToolBasedCommandParser.
-func WithCommandSystemPrompt(systemPrompt string) ParserOption {
-	return func(o *commandParserOptions) {
-		o.systemPrompt = systemPrompt
-	}
-}
-
-// WithCommandSystemPromptTemplate overrides the system prompt template used by ToolBasedCommandParser.
-// If the template contains "%s", it will be formatted with the tool name.
-func WithCommandSystemPromptTemplate(systemPromptTemplate string) ParserOption {
-	return func(o *commandParserOptions) {
+func WithCommandSystemPromptTemplate[T any](systemPromptTemplate string) ParserOption[T] {
+	return func(o *commandParserOptions[T]) {
 		o.systemPromptTemplate = systemPromptTemplate
 	}
+}
+
+func WithCommandPromptBuilder[T any](promptBuilder PromptBuilder[T]) ParserOption[T] {
+	return func(o *commandParserOptions[T]) {
+		o.promptBuilder = promptBuilder
+	}
+}
+
+func newCommandParserOptions[T any](opts ...ParserOption[T]) *commandParserOptions[T] {
+	opt := commandParserOptions[T]{
+		systemPromptTemplate: DefaultParseCommandSystemPromptTemplate,
+		promptBuilder: func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+			return func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+				message, err := types.FormatToolRequest(req)
+				if err != nil {
+					return nil, fmt.Errorf("convert to prompt message failed: %w", err)
+				}
+				return []*schema.Message{
+					schema.SystemMessage(systemPrompt),
+					schema.UserMessage(message),
+				}, nil
+			}
+		},
+	}
+	for _, o := range opts {
+		o(&opt)
+	}
+	return &opt
 }
 
 type parseCommandInput struct {
@@ -63,30 +85,11 @@ type ToolBasedCommandParser[T any] struct {
 	chain *structured.Chain[*types.ToolRequest[T], parseCommandInput]
 }
 
-func NewToolBasedCommandParser[T any](chatModel model.ToolCallingChatModel, opts ...ParserOption) (*ToolBasedCommandParser[T], error) {
-	options := commandParserOptions{systemPromptTemplate: DefaultParseCommandSystemPromptTemplate}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
-
-	systemPrompt := options.systemPrompt
-	if systemPrompt == "" {
-		tpl := options.systemPromptTemplate
-		if tpl == "" {
-			tpl = DefaultParseCommandSystemPromptTemplate
-		}
-		if strings.Contains(tpl, "%s") {
-			systemPrompt = fmt.Sprintf(tpl, parseCommandToolName)
-		} else {
-			systemPrompt = tpl
-		}
-	}
-
+func NewToolBasedCommandParser[T any](chatModel model.ToolCallingChatModel, opts ...ParserOption[T]) (*ToolBasedCommandParser[T], error) {
+	options := newCommandParserOptions[T](opts...)
 	chain, err := structured.NewChain[*types.ToolRequest[T], parseCommandInput](
 		chatModel,
-		buildParseCommandPromptWithSystemPrompt[T](systemPrompt),
+		options.promptBuilder(fmt.Sprintf(options.systemPromptTemplate, parseCommandToolName)),
 		parseCommandToolName,
 		parseCommandToolDescription,
 	)
@@ -105,17 +108,4 @@ func (p *ToolBasedCommandParser[T]) ParseCommand(ctx context.Context, req *types
 		return DoNothing, fmt.Errorf("empty intent returned by %s", parseCommandToolName)
 	}
 	return result.Intent, nil
-}
-
-func buildParseCommandPromptWithSystemPrompt[T any](systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
-	return func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
-		message, err := types.FormatToolRequest(req)
-		if err != nil {
-			return nil, fmt.Errorf("convert to prompt message failed: %w", err)
-		}
-		return []*schema.Message{
-			schema.SystemMessage(systemPrompt),
-			schema.UserMessage(message),
-		}, nil
-	}
 }

@@ -3,23 +3,16 @@ package dialogue
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/types"
 )
 
-type ToolBasedDialogueGenerator[T any] struct {
-	Lang                 string
-	systemPrompt         string
-	systemPromptTemplate string
-	chatModel            model.ToolCallingChatModel
-}
-
-// DefaultDialogueSystemPromptTemplate is the default system prompt template used by
+// DefaultDialogueSystemPrompt is the default system prompt template used by
 // ToolBasedDialogueGenerator. The template may contain a single "%s" placeholder for the language.
-const DefaultDialogueSystemPromptTemplate = `You are a friendly form assistant. Engage in natural, conversational dialogue to guide users through form completion.
+const DefaultDialogueSystemPrompt = `
+You are a friendly form assistant. Engage in natural, conversational dialogue to guide users through form completion.
 
 Respond as if chatting with a friend:
 - If there are missing required fields, casually mention them and ask for the information in a friendly way. Don't list all at once if there are many.
@@ -27,62 +20,67 @@ Respond as if chatting with a friend:
 - Acknowledge what they've already filled out to make them feel good.
 - If all fields are complete and correct, actively ask if they want to submit the form.
 - Avoid lists or bullet points; make it feel like a real conversation.
-- Reply in %s.
+- Reply in **Simplified Chinese**.
 `
 
-type dialogueGeneratorOptions struct {
-	lang                 string
-	systemPrompt         string
-	systemPromptTemplate string
+type PromptBuilder[T any] func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error)
+
+type dialogueGeneratorOptions[T any] struct {
+	systemPrompt  string
+	promptBuilder PromptBuilder[T]
 }
 
-type GeneratorOption func(*dialogueGeneratorOptions)
+type GeneratorOption[T any] func(*dialogueGeneratorOptions[T])
 
-// WithDialogueLang sets the language used by the default system prompt template.
-func WithDialogueLang(lang string) GeneratorOption {
-	return func(o *dialogueGeneratorOptions) {
-		o.lang = lang
-	}
-}
-
-// WithDialogueSystemPrompt overrides the system prompt used by ToolBasedDialogueGenerator.
-func WithDialogueSystemPrompt(systemPrompt string) GeneratorOption {
-	return func(o *dialogueGeneratorOptions) {
-		o.systemPrompt = systemPrompt
+func WithDialogueSystemPromptTemplate[T any](systemPromptTemplate string) GeneratorOption[T] {
+	return func(o *dialogueGeneratorOptions[T]) {
+		o.systemPrompt = systemPromptTemplate
 	}
 }
 
-// WithDialogueSystemPromptTemplate overrides the system prompt template used by ToolBasedDialogueGenerator.
-// If the template contains "%s", it will be formatted with the language.
-func WithDialogueSystemPromptTemplate(systemPromptTemplate string) GeneratorOption {
-	return func(o *dialogueGeneratorOptions) {
-		o.systemPromptTemplate = systemPromptTemplate
+func WithDialoguePromptBuilder[T any](promptBuilder PromptBuilder[T]) GeneratorOption[T] {
+	return func(o *dialogueGeneratorOptions[T]) {
+		o.promptBuilder = promptBuilder
 	}
 }
 
-func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption) *ToolBasedDialogueGenerator[T] {
-	options := dialogueGeneratorOptions{
-		lang:                 "Simplified Chinese",
-		systemPromptTemplate: DefaultDialogueSystemPromptTemplate,
+func newDialogueGeneratorOptions[T any](opts ...GeneratorOption[T]) dialogueGeneratorOptions[T] {
+	opt := dialogueGeneratorOptions[T]{
+		systemPrompt: DefaultDialogueSystemPrompt,
+		promptBuilder: func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+			return func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+				message, err := types.FormatToolRequest(req)
+				if err != nil {
+					return nil, fmt.Errorf("convert to prompt message failed: %w", err)
+				}
+				return []*schema.Message{
+					schema.SystemMessage(systemPrompt),
+					schema.UserMessage(message),
+				}, nil
+			}
+		},
 	}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
+	for _, o := range opts {
+		o(&opt)
 	}
-	if options.lang == "" {
-		options.lang = "Simplified Chinese"
-	}
+	return opt
+}
+
+type ToolBasedDialogueGenerator[T any] struct {
+	promptBuilder func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error)
+	chatModel     model.ToolCallingChatModel
+}
+
+func NewToolBasedDialogueGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption[T]) *ToolBasedDialogueGenerator[T] {
+	options := newDialogueGeneratorOptions[T](opts...)
 	return &ToolBasedDialogueGenerator[T]{
-		Lang:                 options.lang,
-		systemPrompt:         options.systemPrompt,
-		systemPromptTemplate: options.systemPromptTemplate,
-		chatModel:            chatModel,
+		promptBuilder: options.promptBuilder(options.systemPrompt),
+		chatModel:     chatModel,
 	}
 }
 
 func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *types.ToolRequest[T]) (string, error) {
-	messages, err := g.buildDialoguePrompt(req)
+	messages, err := g.promptBuilder(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("build dialogue prompt: %w", err)
 	}
@@ -95,7 +93,7 @@ func (g *ToolBasedDialogueGenerator[T]) GenerateDialogue(ctx context.Context, re
 }
 
 func (g *ToolBasedDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *types.ToolRequest[T]) (*schema.StreamReader[string], error) {
-	messages, err := g.buildDialoguePrompt(req)
+	messages, err := g.promptBuilder(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("build dialogue prompt: %w", err)
 	}
@@ -108,30 +106,4 @@ func (g *ToolBasedDialogueGenerator[T]) GenerateDialogueStream(ctx context.Conte
 		return message.Content, nil
 	})
 	return textStream, nil
-}
-
-func (g *ToolBasedDialogueGenerator[T]) buildDialoguePrompt(req *types.ToolRequest[T]) ([]*schema.Message, error) {
-
-	message, err := types.FormatToolRequest(req)
-	if err != nil {
-		return nil, fmt.Errorf("convert to prompt message failed: %w", err)
-	}
-
-	systemPrompt := g.systemPrompt
-	if systemPrompt == "" {
-		tpl := g.systemPromptTemplate
-		if tpl == "" {
-			tpl = DefaultDialogueSystemPromptTemplate
-		}
-		if strings.Contains(tpl, "%s") {
-			systemPrompt = fmt.Sprintf(tpl, g.Lang)
-		} else {
-			systemPrompt = tpl
-		}
-	}
-
-	return []*schema.Message{
-		schema.SystemMessage(systemPrompt),
-		schema.UserMessage(message),
-	}, nil
 }

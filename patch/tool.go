@@ -3,10 +3,9 @@ package patch
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/cloudwego/eino/components/model"
-	einoSchema "github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/structured"
 	"github.com/tbxark/formagent/types"
 )
@@ -18,7 +17,8 @@ const (
 
 // DefaultUpdateFormSystemPromptTemplate is the default system prompt template used by
 // ToolBasedPatchGenerator. The template may contain a single "%s" placeholder for the tool name.
-const DefaultUpdateFormSystemPromptTemplate = `You are a form assistant. Analyze user input and call '%s' to generate RFC6902 JSON Patch operations.
+const DefaultUpdateFormSystemPromptTemplate = `
+You are a form assistant. Analyze user input and call '%s' to generate RFC6902 JSON Patch operations.
 
 General rules:
 - Only use information explicitly provided by the user in this turn. Do not infer or guess.
@@ -62,56 +62,58 @@ Context:
 - The form is currently being edited; ignore "required" constraints for now.
 `
 
-type patchGeneratorOptions struct {
-	systemPrompt         string
+type PromptBuilder[T any] func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error)
+
+type patchGeneratorOptions[T any] struct {
 	systemPromptTemplate string
+	promptBuilder        PromptBuilder[T]
 }
 
-type GeneratorOption func(*patchGeneratorOptions)
+type GeneratorOption[T any] func(*patchGeneratorOptions[T])
 
-// WithPatchSystemPrompt overrides the system prompt used by ToolBasedPatchGenerator.
-func WithPatchSystemPrompt(systemPrompt string) GeneratorOption {
-	return func(o *patchGeneratorOptions) {
-		o.systemPrompt = systemPrompt
-	}
-}
-
-// WithPatchSystemPromptTemplate overrides the system prompt template used by ToolBasedPatchGenerator.
-// If the template contains "%s", it will be formatted with the tool name.
-func WithPatchSystemPromptTemplate(systemPromptTemplate string) GeneratorOption {
-	return func(o *patchGeneratorOptions) {
+func WithPatchSystemPromptTemplate[T any](systemPromptTemplate string) GeneratorOption[T] {
+	return func(o *patchGeneratorOptions[T]) {
 		o.systemPromptTemplate = systemPromptTemplate
 	}
+}
+
+func WithPatchPromptBuilder[T any](promptBuilder PromptBuilder[T]) GeneratorOption[T] {
+	return func(o *patchGeneratorOptions[T]) {
+		o.promptBuilder = promptBuilder
+	}
+}
+
+func newPatchGeneratorOptions[T any](opts ...GeneratorOption[T]) *patchGeneratorOptions[T] {
+	opt := patchGeneratorOptions[T]{
+		systemPromptTemplate: DefaultUpdateFormSystemPromptTemplate,
+		promptBuilder: func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+			return func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
+				message, err := types.FormatToolRequest(req)
+				if err != nil {
+					return nil, fmt.Errorf("convert to prompt message failed: %w", err)
+				}
+				return []*schema.Message{
+					schema.SystemMessage(systemPrompt),
+					schema.UserMessage(message),
+				}, nil
+			}
+		},
+	}
+	for _, o := range opts {
+		o(&opt)
+	}
+	return &opt
 }
 
 type ToolBasedPatchGenerator[T any] struct {
 	chain *structured.Chain[*types.ToolRequest[T], UpdateFormArgs]
 }
 
-func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption) (*ToolBasedPatchGenerator[T], error) {
-	options := patchGeneratorOptions{systemPromptTemplate: DefaultUpdateFormSystemPromptTemplate}
-	for _, opt := range opts {
-		if opt != nil {
-			opt(&options)
-		}
-	}
-
-	systemPrompt := options.systemPrompt
-	if systemPrompt == "" {
-		tpl := options.systemPromptTemplate
-		if tpl == "" {
-			tpl = DefaultUpdateFormSystemPromptTemplate
-		}
-		if strings.Contains(tpl, "%s") {
-			systemPrompt = fmt.Sprintf(tpl, updateFormToolName)
-		} else {
-			systemPrompt = tpl
-		}
-	}
-
+func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption[T]) (*ToolBasedPatchGenerator[T], error) {
+	options := newPatchGeneratorOptions(opts...)
 	chain, err := structured.NewChain[*types.ToolRequest[T], UpdateFormArgs](
 		chatModel,
-		buildPatchPromptWithSystemPrompt[T](systemPrompt),
+		options.promptBuilder(fmt.Sprintf(options.systemPromptTemplate, updateFormToolName)),
 		updateFormToolName,
 		updateFormToolDescription,
 	)
@@ -130,17 +132,4 @@ func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *typ
 		return nil, nil
 	}
 	return result, nil
-}
-
-func buildPatchPromptWithSystemPrompt[T any](systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
-	return func(ctx context.Context, req *types.ToolRequest[T]) ([]*einoSchema.Message, error) {
-		message, err := types.FormatToolRequest(req)
-		if err != nil {
-			return nil, fmt.Errorf("convert to prompt message failed: %w", err)
-		}
-		return []*einoSchema.Message{
-			einoSchema.SystemMessage(systemPrompt),
-			einoSchema.UserMessage(message),
-		}, nil
-	}
 }

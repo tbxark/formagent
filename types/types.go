@@ -18,10 +18,12 @@ type FieldInfo struct {
 }
 
 type ToolRequest[T any] struct {
-	State       T
-	StateSchema string
-	Phase       Phase
-	Messages    []*schema.Message
+	State        T
+	StateSchema  string
+	StateSummary string
+
+	Phase    Phase
+	Messages []*schema.Message
 
 	MissingFields    []FieldInfo
 	ValidationErrors []FieldInfo
