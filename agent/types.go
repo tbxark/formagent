@@ -14,7 +14,7 @@ type Request[T any] struct {
 	ChatHistory []*schema.Message `json:"chat_history"`
 }
 type Response[T any] struct {
-	Message  string            `json:"message"`
-	State    *State[T]         `json:"state"`
+	Message  string            `json:"message,omitempty"`
+	State    *State[T]         `json:"state,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }

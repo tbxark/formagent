@@ -78,7 +78,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	slog.Debug("Parsing indent", "request", toolRequest.State)
 	cmd, err := a.IndentRecognizer.RecognizerIntent(ctx, toolRequest)
 	if err != nil {
-		return a.handleError(fmt.Errorf("failed to parse indent: %w", err), input)
+		return nil, err
 	}
 	slog.Debug("Parsed indent", "indent", cmd, "input", input)
 	switch cmd {
@@ -93,18 +93,18 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		slog.Debug("Requesting patch generation")
 		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, toolRequest)
 		if pErr != nil {
-			return a.handleError(fmt.Errorf("failed to generate patch: %w", pErr), input)
+			return nil, pErr
 		}
 		if a.PatchHook != nil {
 			updateArgs.Ops, pErr = a.PatchHook(input.State.FormState, updateArgs.Ops)
 			if pErr != nil {
-				return a.handleError(fmt.Errorf("failed to apply patch hook: %w", pErr), input)
+				return nil, pErr
 			}
 		}
 		slog.Debug("Applying patch", "ops", updateArgs.Ops)
 		newState, pErr := patch.ApplyRFC6902(input.State.FormState, updateArgs.Ops)
 		if pErr != nil {
-			return a.handleError(fmt.Errorf("failed to apply patch: %w", pErr), input)
+			return nil, pErr
 		}
 		input.State.FormState = newState
 		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
@@ -118,7 +118,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	slog.Debug("Generating dialogue")
 	question, err := a.DialogueGenerator.GenerateDialogue(ctx, toolRequest)
 	if err != nil {
-		return a.handleError(fmt.Errorf("failed to generate dialogue: %w", err), input)
+		return nil, err
 	}
 	slog.Debug("Generated dialogue", "question", question)
 
@@ -145,15 +145,4 @@ func (a *FormFlow[T]) handleCommand(cmd indent.Intent, input *Request[T]) (*Resp
 		return resp, nil
 	}
 	return resp, nil
-}
-
-func (a *FormFlow[T]) handleError(err error, input *Request[T]) (*Response[T], error) {
-	message := fmt.Sprintf("抱歉，处理您的输入时遇到了问题：%s", err.Error())
-	return &Response[T]{
-		Message: message,
-		State:   input.State,
-		Metadata: map[string]string{
-			"error": err.Error(),
-		},
-	}, nil
 }
