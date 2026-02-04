@@ -13,9 +13,9 @@ import (
 type PromptBuilder[TInput any] func(ctx context.Context, input TInput) ([]*schema.Message, error)
 
 type Chain[TInput, TOutput any] struct {
-	promptBuilder PromptBuilder[TInput]
-	chatModel     model.ToolCallingChatModel
-	toolInfo      *schema.ToolInfo
+	PromptBuilder PromptBuilder[TInput]
+	ChatModel     model.ToolCallingChatModel
+	ToolInfo      *schema.ToolInfo
 }
 
 func NewChain[TInput, TOutput any](
@@ -31,21 +31,21 @@ func NewChain[TInput, TOutput any](
 	}
 
 	return &Chain[TInput, TOutput]{
-		promptBuilder: promptBuilder,
-		chatModel:     chatModel,
-		toolInfo:      toolInfo,
+		PromptBuilder: promptBuilder,
+		ChatModel:     chatModel,
+		ToolInfo:      toolInfo,
 	}, nil
 }
 
 func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOutput, error) {
-	messages, err := s.promptBuilder(ctx, input)
+	messages, err := s.PromptBuilder(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("构建提示词失败: %w", err)
 	}
 
-	response, err := s.chatModel.Generate(ctx, messages,
-		model.WithTools([]*schema.ToolInfo{s.toolInfo}),
-		model.WithToolChoice(schema.ToolChoiceForced, s.toolInfo.Name),
+	response, err := s.ChatModel.Generate(ctx, messages,
+		model.WithTools([]*schema.ToolInfo{s.ToolInfo}),
+		model.WithToolChoice(schema.ToolChoiceForced, s.ToolInfo.Name),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("调用模型失败: %w", err)
@@ -65,14 +65,14 @@ func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOu
 }
 
 func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput) (*schema.StreamReader[*TOutput], error) {
-	messages, err := s.promptBuilder(ctx, input)
+	messages, err := s.PromptBuilder(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("构建提示词失败: %w", err)
 	}
 
-	streamReader, err := s.chatModel.Stream(ctx, messages,
-		model.WithTools([]*schema.ToolInfo{s.toolInfo}),
-		model.WithToolChoice(schema.ToolChoiceForced, s.toolInfo.Name),
+	streamReader, err := s.ChatModel.Stream(ctx, messages,
+		model.WithTools([]*schema.ToolInfo{s.ToolInfo}),
+		model.WithToolChoice(schema.ToolChoiceForced, s.ToolInfo.Name),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("流式调用模型失败: %w", err)
@@ -95,5 +95,5 @@ func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput) (*sch
 }
 
 func (s *Chain[TInput, TOutput]) GetToolInfo() *schema.ToolInfo {
-	return s.toolInfo
+	return s.ToolInfo
 }
