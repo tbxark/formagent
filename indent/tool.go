@@ -1,4 +1,4 @@
-package command
+package indent
 
 import (
 	"context"
@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	parseCommandToolName        = "parse_command_intent"
-	parseCommandToolDescription = "Analyze user input and determine command intent: cancel, confirm, none."
+	parseIntentToolName        = "parse_intent"
+	parseIntentToolDescription = "Analyze user input and determine command intent: cancel, confirm, none."
 )
 
-// DefaultParseCommandSystemPromptTemplate is the default system prompt template used by
-// ToolBasedCommandParser. The template may contain a single "%s" placeholder for the tool name.
-const DefaultParseCommandSystemPromptTemplate = `
+// DefaultParseIntentSystemPromptTemplate is the default system prompt template used by
+// ToolBasedIntentRecognizer. The template may contain a single "%s" placeholder for the tool name.
+const DefaultParseIntentSystemPromptTemplate = `
 You are an assistant for a form-filling robot, helping to understand user input in the context of filling out forms.
 
 Analyze the latest communication between the user and the assistant to determine the user's intent regarding form editing.
@@ -36,28 +36,28 @@ Call the '%s' tool with the result.
 
 type PromptBuilder[T any] func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error)
 
-type commandParserOptions[T any] struct {
+type intentParserOptions[T any] struct {
 	systemPromptTemplate string
 	promptBuilder        PromptBuilder[T]
 }
 
-type ParserOption[T any] func(*commandParserOptions[T])
+type ParserOption[T any] func(*intentParserOptions[T])
 
-func WithCommandSystemPromptTemplate[T any](systemPromptTemplate string) ParserOption[T] {
-	return func(o *commandParserOptions[T]) {
+func WithIntentSystemPromptTemplate[T any](systemPromptTemplate string) ParserOption[T] {
+	return func(o *intentParserOptions[T]) {
 		o.systemPromptTemplate = systemPromptTemplate
 	}
 }
 
-func WithCommandPromptBuilder[T any](promptBuilder PromptBuilder[T]) ParserOption[T] {
-	return func(o *commandParserOptions[T]) {
+func WithIntentPromptBuilder[T any](promptBuilder PromptBuilder[T]) ParserOption[T] {
+	return func(o *intentParserOptions[T]) {
 		o.promptBuilder = promptBuilder
 	}
 }
 
-func newCommandParserOptions[T any](opts ...ParserOption[T]) *commandParserOptions[T] {
-	opt := commandParserOptions[T]{
-		systemPromptTemplate: DefaultParseCommandSystemPromptTemplate,
+func newIntentRecognizerOptions[T any](opts ...ParserOption[T]) *intentParserOptions[T] {
+	opt := intentParserOptions[T]{
+		systemPromptTemplate: DefaultParseIntentSystemPromptTemplate,
 		promptBuilder: func(systemPrompt string) func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
 			return func(ctx context.Context, req *types.ToolRequest[T]) ([]*schema.Message, error) {
 				message, err := types.FormatToolRequest(req)
@@ -78,34 +78,34 @@ func newCommandParserOptions[T any](opts ...ParserOption[T]) *commandParserOptio
 }
 
 type parseCommandInput struct {
-	Intent Command `json:"intent" jsonschema:"required,enum=cancel,enum=confirm,enum=edit,enum=do_nothing,description=The user's command intent"`
+	Intent Intent `json:"intent" jsonschema:"required,enum=cancel,enum=confirm,enum=edit,enum=do_nothing,description=The user's command intent"`
 }
 
-type ToolBasedCommandParser[T any] struct {
+type ToolBasedIntentRecognizer[T any] struct {
 	chain *structured.Chain[*types.ToolRequest[T], parseCommandInput]
 }
 
-func NewToolBasedCommandParser[T any](chatModel model.ToolCallingChatModel, opts ...ParserOption[T]) (*ToolBasedCommandParser[T], error) {
-	options := newCommandParserOptions[T](opts...)
+func NewToolBasedIntentRecognizer[T any](chatModel model.ToolCallingChatModel, opts ...ParserOption[T]) (*ToolBasedIntentRecognizer[T], error) {
+	options := newIntentRecognizerOptions[T](opts...)
 	chain, err := structured.NewChain[*types.ToolRequest[T], parseCommandInput](
 		chatModel,
-		options.promptBuilder(fmt.Sprintf(options.systemPromptTemplate, parseCommandToolName)),
-		parseCommandToolName,
-		parseCommandToolDescription,
+		options.promptBuilder(fmt.Sprintf(options.systemPromptTemplate, parseIntentToolName)),
+		parseIntentToolName,
+		parseIntentToolDescription,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return &ToolBasedCommandParser[T]{chain: chain}, nil
+	return &ToolBasedIntentRecognizer[T]{chain: chain}, nil
 }
 
-func (p *ToolBasedCommandParser[T]) ParseCommand(ctx context.Context, req *types.ToolRequest[T]) (Command, error) {
+func (p *ToolBasedIntentRecognizer[T]) RecognizerIntent(ctx context.Context, req *types.ToolRequest[T]) (Intent, error) {
 	result, err := p.chain.Invoke(ctx, req)
 	if err != nil {
 		return DoNothing, err
 	}
 	if result == nil || result.Intent == "" {
-		return DoNothing, fmt.Errorf("empty intent returned by %s", parseCommandToolName)
+		return DoNothing, fmt.Errorf("empty intent returned by %s", parseIntentToolName)
 	}
 	return result.Intent, nil
 }

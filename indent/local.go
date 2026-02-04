@@ -1,4 +1,4 @@
-package command
+package indent
 
 import (
 	"context"
@@ -7,19 +7,19 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
-type LocalCommandParser[T any] struct {
+type LocalIntentRecognizer[T any] struct {
 	CancelKeywords  []string
 	ConfirmKeywords []string
 }
 
-func NewLocalCommandParser[T any]() *LocalCommandParser[T] {
-	return &LocalCommandParser[T]{
+func NewLocalIntentRecognizer[T any]() *LocalIntentRecognizer[T] {
+	return &LocalIntentRecognizer[T]{
 		CancelKeywords:  []string{"取消", "cancel", "退出", "quit", "exit", "停止", "stop"},
 		ConfirmKeywords: []string{"确认", "confirm", "提交", "submit", "完成", "done", "好的", "ok", "好"},
 	}
 }
 
-func (p *LocalCommandParser[T]) ParseCommand(ctx context.Context, req *types.ToolRequest[T]) (Command, error) {
+func (p *LocalIntentRecognizer[T]) RecognizerIntent(ctx context.Context, req *types.ToolRequest[T]) (Intent, error) {
 	if len(req.Messages) == 0 {
 		return DoNothing, nil
 	}
@@ -38,17 +38,17 @@ func (p *LocalCommandParser[T]) ParseCommand(ctx context.Context, req *types.Too
 }
 
 type FailbackCommandParser[T any] struct {
-	parsers []Parser[T]
+	parsers []Recognizer[T]
 }
 
-func NewFailbackCommandParser[T any](parsers ...Parser[T]) *FailbackCommandParser[T] {
+func NewFailbackCommandParser[T any](parsers ...Recognizer[T]) *FailbackCommandParser[T] {
 	return &FailbackCommandParser[T]{parsers: parsers}
 }
 
-func (p *FailbackCommandParser[T]) ParseCommand(ctx context.Context, req *types.ToolRequest[T]) (Command, error) {
+func (p *FailbackCommandParser[T]) RecognizerIntent(ctx context.Context, req *types.ToolRequest[T]) (Intent, error) {
 	var lastErr error
 	for _, parser := range p.parsers {
-		cmd, err := parser.ParseCommand(ctx, req)
+		cmd, err := parser.RecognizerIntent(ctx, req)
 		if err == nil {
 			return cmd, nil
 		}

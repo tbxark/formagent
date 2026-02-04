@@ -6,8 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/cloudwego/eino/components/model"
-	"github.com/tbxark/formagent/command"
 	"github.com/tbxark/formagent/dialogue"
+	"github.com/tbxark/formagent/indent"
 	"github.com/tbxark/formagent/patch"
 	"github.com/tbxark/formagent/types"
 )
@@ -17,10 +17,10 @@ type FormFlow[T any] struct {
 	spec              FormSpec[T]
 	patchGenerator    patch.Generator[T]
 	dialogueGenerator dialogue.Generator[T]
-	commandParser     command.Parser[T]
+	indentRecognizer  indent.Recognizer[T]
 }
 
-func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], commandParser command.Parser[T]) (*FormFlow[T], error) {
+func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], indentRecognizer indent.Recognizer[T]) (*FormFlow[T], error) {
 	schema, err := spec.JsonSchema()
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen
 		spec:              spec,
 		patchGenerator:    patchGen,
 		dialogueGenerator: dialogGen,
-		commandParser:     commandParser,
+		indentRecognizer:  indentRecognizer,
 	}
 
 	return agent, nil
@@ -40,9 +40,9 @@ func NewToolBasedFormFlow[T any](
 	spec FormSpec[T],
 	chatModel model.ToolCallingChatModel,
 ) (*FormFlow[T], error) {
-	parser, err := command.NewToolBasedCommandParser[T](chatModel)
+	parser, err := indent.NewToolBasedIntentRecognizer[T](chatModel)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create tool-based command parser: %w", err)
+		return nil, fmt.Errorf("failed to create tool-based indent parser: %w", err)
 	}
 	patchGen, err := patch.NewToolBasedPatchGenerator[T](chatModel)
 	if err != nil {
@@ -81,21 +81,21 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		ValidationErrors: validationErrors,
 	}
 
-	// command
-	slog.Debug("Parsing command", "request", toolRequest.State)
-	cmd, err := a.commandParser.ParseCommand(ctx, toolRequest)
+	// indent
+	slog.Debug("Parsing indent", "request", toolRequest.State)
+	cmd, err := a.indentRecognizer.RecognizerIntent(ctx, toolRequest)
 	if err != nil {
-		return a.handleError(fmt.Errorf("failed to parse command: %w", err), input)
+		return a.handleError(fmt.Errorf("failed to parse indent: %w", err), input)
 	}
-	slog.Debug("Parsed command", "command", cmd, "input", input)
+	slog.Debug("Parsed indent", "indent", cmd, "input", input)
 	switch cmd {
-	case command.Confirm:
+	case indent.Confirm:
 		if len(missingFields) == 0 && len(validationErrors) == 0 {
 			return a.handleCommand(cmd, input)
 		}
-	case command.Cancel:
+	case indent.Cancel:
 		return a.handleCommand(cmd, input)
-	case command.Edit:
+	case indent.Edit:
 		// patch
 		toolRequest.StateSchema = a.schema
 		slog.Debug("Requesting patch generation")
@@ -110,7 +110,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		}
 		input.State.FormState = newState
 		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
-	case command.DoNothing:
+	case indent.DoNothing:
 		break
 	}
 
@@ -130,17 +130,17 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	}, nil
 }
 
-func (a *FormFlow[T]) handleCommand(cmd command.Command, input *Request[T]) (*Response[T], error) {
+func (a *FormFlow[T]) handleCommand(cmd indent.Intent, input *Request[T]) (*Response[T], error) {
 	resp := &Response[T]{
 		Message:  "",
 		State:    input.State,
 		Metadata: map[string]string{},
 	}
 	switch cmd {
-	case command.Cancel:
+	case indent.Cancel:
 		resp.Message = "表单填写已取消。"
 		resp.State.Phase = types.PhaseCancelled
-	case command.Confirm:
+	case indent.Confirm:
 		resp.Message = "表单已成功提交，谢谢！"
 		resp.State.Phase = types.PhaseConfirmed
 	default:
