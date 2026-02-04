@@ -13,11 +13,12 @@ import (
 )
 
 type FormFlow[T any] struct {
-	schema            string
-	spec              FormSpec[T]
-	patchGenerator    patch.Generator[T]
-	dialogueGenerator dialogue.Generator[T]
-	indentRecognizer  indent.Recognizer[T]
+	Schema            string
+	PatchHook         func([]patch.Operation) ([]patch.Operation, error)
+	Spec              FormSpec[T]
+	PatchGenerator    patch.Generator[T]
+	DialogueGenerator dialogue.Generator[T]
+	IndentRecognizer  indent.Recognizer[T]
 }
 
 func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], indentRecognizer indent.Recognizer[T]) (*FormFlow[T], error) {
@@ -26,11 +27,11 @@ func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen
 		return nil, err
 	}
 	agent := &FormFlow[T]{
-		schema:            schema,
-		spec:              spec,
-		patchGenerator:    patchGen,
-		dialogueGenerator: dialogGen,
-		indentRecognizer:  indentRecognizer,
+		Schema:            schema,
+		Spec:              spec,
+		PatchGenerator:    patchGen,
+		DialogueGenerator: dialogGen,
+		IndentRecognizer:  indentRecognizer,
 	}
 
 	return agent, nil
@@ -70,11 +71,11 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 
 func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Response[T], error) {
 
-	missingFields := a.spec.MissingFacts(ctx, input.State.FormState)
-	validationErrors := a.spec.ValidateFacts(ctx, input.State.FormState)
+	missingFields := a.Spec.MissingFacts(ctx, input.State.FormState)
+	validationErrors := a.Spec.ValidateFacts(ctx, input.State.FormState)
 	toolRequest := &types.ToolRequest[T]{
 		State:            input.State.FormState,
-		StateSummary:     a.spec.Summary(ctx, input.State.FormState),
+		StateSummary:     a.Spec.Summary(ctx, input.State.FormState),
 		Phase:            input.State.Phase,
 		Messages:         input.ChatHistory,
 		MissingFields:    missingFields,
@@ -83,7 +84,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 
 	// indent
 	slog.Debug("Parsing indent", "request", toolRequest.State)
-	cmd, err := a.indentRecognizer.RecognizerIntent(ctx, toolRequest)
+	cmd, err := a.IndentRecognizer.RecognizerIntent(ctx, toolRequest)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to parse indent: %w", err), input)
 	}
@@ -97,11 +98,17 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		return a.handleCommand(cmd, input)
 	case indent.Edit:
 		// patch
-		toolRequest.StateSchema = a.schema
+		toolRequest.StateSchema = a.Schema
 		slog.Debug("Requesting patch generation")
-		updateArgs, pErr := a.patchGenerator.GeneratePatch(ctx, toolRequest)
+		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, toolRequest)
 		if pErr != nil {
 			return a.handleError(fmt.Errorf("failed to generate patch: %w", pErr), input)
+		}
+		if a.PatchHook != nil {
+			updateArgs.Ops, pErr = a.PatchHook(updateArgs.Ops)
+			if pErr != nil {
+				return a.handleError(fmt.Errorf("failed to apply patch hook: %w", pErr), input)
+			}
 		}
 		slog.Debug("Applying patch", "ops", updateArgs.Ops)
 		newState, pErr := patch.ApplyRFC6902(input.State.FormState, updateArgs.Ops)
@@ -115,10 +122,10 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 	}
 
 	// dialogue
-	toolRequest.MissingFields = a.spec.MissingFacts(ctx, input.State.FormState)
-	toolRequest.ValidationErrors = a.spec.ValidateFacts(ctx, input.State.FormState)
+	toolRequest.MissingFields = a.Spec.MissingFacts(ctx, input.State.FormState)
+	toolRequest.ValidationErrors = a.Spec.ValidateFacts(ctx, input.State.FormState)
 	slog.Debug("Generating dialogue")
-	question, err := a.dialogueGenerator.GenerateDialogue(ctx, toolRequest)
+	question, err := a.DialogueGenerator.GenerateDialogue(ctx, toolRequest)
 	if err != nil {
 		return a.handleError(fmt.Errorf("failed to generate dialogue: %w", err), input)
 	}
