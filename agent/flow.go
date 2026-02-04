@@ -13,7 +13,6 @@ import (
 )
 
 type FormFlow[T any] struct {
-	Schema            string
 	PatchHook         func(T, []patch.Operation) ([]patch.Operation, error)
 	Spec              FormSpec[T]
 	PatchGenerator    patch.Generator[T]
@@ -21,20 +20,13 @@ type FormFlow[T any] struct {
 	IndentRecognizer  indent.Recognizer[T]
 }
 
-func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], indentRecognizer indent.Recognizer[T]) (*FormFlow[T], error) {
-	schema, err := spec.JsonSchema()
-	if err != nil {
-		return nil, err
-	}
-	agent := &FormFlow[T]{
-		Schema:            schema,
+func NewFormFlow[T any](spec FormSpec[T], patchGen patch.Generator[T], dialogGen dialogue.Generator[T], indentRecognizer indent.Recognizer[T]) *FormFlow[T] {
+	return &FormFlow[T]{
 		Spec:              spec,
 		PatchGenerator:    patchGen,
 		DialogueGenerator: dialogGen,
 		IndentRecognizer:  indentRecognizer,
 	}
-
-	return agent, nil
 }
 
 func NewToolBasedFormFlow[T any](
@@ -55,7 +47,7 @@ func NewToolBasedFormFlow[T any](
 		patchGen,
 		dialogueGen,
 		parser,
-	)
+	), nil
 }
 
 func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[T], error) {
@@ -98,7 +90,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		return a.handleCommand(cmd, input)
 	case indent.Edit:
 		// patch
-		toolRequest.StateSchema = a.Schema
+		toolRequest.StateSchema = input.Schema
 		slog.Debug("Requesting patch generation")
 		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, toolRequest)
 		if pErr != nil {

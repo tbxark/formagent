@@ -7,8 +7,6 @@ import (
 )
 
 type FormSpec[T any] interface {
-	JsonSchema() (string, error)
-
 	MissingFacts(ctx context.Context, current T) []types.FieldInfo
 	ValidateFacts(ctx context.Context, current T) []types.FieldInfo
 
