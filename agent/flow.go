@@ -90,7 +90,6 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 		return a.handleCommand(cmd, input)
 	case indent.Edit:
 		// patch
-		toolRequest.StateSchema = input.Schema
 		slog.Debug("Requesting patch generation")
 		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, toolRequest)
 		if pErr != nil {

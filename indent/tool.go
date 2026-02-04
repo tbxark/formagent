@@ -82,7 +82,7 @@ type parseCommandInput struct {
 }
 
 type ToolBasedIntentRecognizer[T any] struct {
-	chain *structured.Chain[*types.ToolRequest[T], parseCommandInput]
+	Chain *structured.Chain[*types.ToolRequest[T], parseCommandInput]
 }
 
 func NewToolBasedIntentRecognizer[T any](chatModel model.ToolCallingChatModel, opts ...ParserOption[T]) (*ToolBasedIntentRecognizer[T], error) {
@@ -96,11 +96,11 @@ func NewToolBasedIntentRecognizer[T any](chatModel model.ToolCallingChatModel, o
 	if err != nil {
 		return nil, err
 	}
-	return &ToolBasedIntentRecognizer[T]{chain: chain}, nil
+	return &ToolBasedIntentRecognizer[T]{Chain: chain}, nil
 }
 
 func (p *ToolBasedIntentRecognizer[T]) RecognizerIntent(ctx context.Context, req *types.ToolRequest[T]) (Intent, error) {
-	result, err := p.chain.Invoke(ctx, req)
+	result, err := p.Chain.Invoke(ctx, req)
 	if err != nil {
 		return DoNothing, err
 	}

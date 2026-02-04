@@ -69,7 +69,6 @@ func startApp(ctx context.Context, config *Config) error {
 		},
 	)
 	spec := &InvoiceFormSpec{}
-	specSchema, _ := spec.JsonSchema()
 	flow, err := agent.NewToolBasedFormFlow[*Invoice](spec, cm)
 	if err != nil {
 		return err
@@ -77,7 +76,6 @@ func startApp(ctx context.Context, config *Config) error {
 	formAgent := agent.NewAgent(
 		"InvoiceFiller",
 		"An agent that helps users fill and submit invoice forms via conversation",
-		specSchema,
 		flow,
 		stateManager,
 	)

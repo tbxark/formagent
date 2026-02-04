@@ -106,7 +106,7 @@ func newPatchGeneratorOptions[T any](opts ...GeneratorOption[T]) *patchGenerator
 }
 
 type ToolBasedPatchGenerator[T any] struct {
-	chain *structured.Chain[*types.ToolRequest[T], UpdateFormArgs]
+	Chain *structured.Chain[*types.ToolRequest[T], UpdateFormArgs]
 }
 
 func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel, opts ...GeneratorOption[T]) (*ToolBasedPatchGenerator[T], error) {
@@ -120,11 +120,11 @@ func NewToolBasedPatchGenerator[T any](chatModel model.ToolCallingChatModel, opt
 	if err != nil {
 		return nil, err
 	}
-	return &ToolBasedPatchGenerator[T]{chain: chain}, nil
+	return &ToolBasedPatchGenerator[T]{Chain: chain}, nil
 }
 
 func (g *ToolBasedPatchGenerator[T]) GeneratePatch(ctx context.Context, req *types.ToolRequest[T]) (*UpdateFormArgs, error) {
-	result, err := g.chain.Invoke(ctx, req)
+	result, err := g.Chain.Invoke(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("LLM call failed: %w", err)
 	}

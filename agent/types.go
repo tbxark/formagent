@@ -10,9 +10,8 @@ type State[T any] struct {
 	FormState T           `json:"form_state" jsonschema:"description=The current state of the form being filled"`
 }
 type Request[T any] struct {
-	Schema      string            `json:"schema" jsonschema:"description=The JSON Schema of the form being filled"`
-	State       *State[T]         `json:"state" jsonschema:"description=The current state of the form filling process"`
-	ChatHistory []*schema.Message `json:"chat_history" jsonschema:"description=The chat history between the user and the agent"`
+	State       *State[T]         `json:"state"`
+	ChatHistory []*schema.Message `json:"chat_history"`
 }
 type Response[T any] struct {
 	Message  string            `json:"message"`

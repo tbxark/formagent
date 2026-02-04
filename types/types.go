@@ -19,7 +19,6 @@ type FieldInfo struct {
 
 type ToolRequest[T any] struct {
 	State        T
-	StateSchema  string
 	StateSummary string
 
 	Phase    Phase

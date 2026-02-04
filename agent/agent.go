@@ -13,16 +13,14 @@ var _ adk.Agent = (*Agent[any])(nil)
 type Agent[T any] struct {
 	name        string
 	description string
-	schema      string
 	flow        *FormFlow[T]
 	store       StateReadWriter[T]
 }
 
-func NewAgent[T any](name, description, schema string, flow *FormFlow[T], store StateReadWriter[T]) *Agent[T] {
+func NewAgent[T any](name, description string, flow *FormFlow[T], store StateReadWriter[T]) *Agent[T] {
 	return &Agent[T]{
 		name:        name,
 		description: description,
-		schema:      schema,
 		flow:        flow,
 		store:       store,
 	}
@@ -61,7 +59,6 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			return
 		}
 		resp, err := a.flow.Invoke(ctx, &Request[T]{
-			Schema:      a.schema,
 			State:       state,
 			ChatHistory: input.Messages,
 		})

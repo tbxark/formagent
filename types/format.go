@@ -68,9 +68,6 @@ func FormatToolRequest[T any](req *ToolRequest[T]) (string, error) {
 	if req.StateSummary != "" {
 		sections = append(sections, fmt.Sprintf("# Form state summary:\n%s", req.StateSummary))
 	}
-	if req.StateSchema != "" {
-		sections = append(sections, fmt.Sprintf("# Form state schema JSON:\n```json\n%s\n```", req.StateSchema))
-	}
 	if req.Phase != "" {
 		sections = append(sections, fmt.Sprintf("# Current Phase:\n%s", req.Phase))
 	}
