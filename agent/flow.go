@@ -14,7 +14,7 @@ import (
 
 type FormFlow[T any] struct {
 	Schema            string
-	PatchHook         func([]patch.Operation) ([]patch.Operation, error)
+	PatchHook         func(T, []patch.Operation) ([]patch.Operation, error)
 	Spec              FormSpec[T]
 	PatchGenerator    patch.Generator[T]
 	DialogueGenerator dialogue.Generator[T]
@@ -105,7 +105,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 			return a.handleError(fmt.Errorf("failed to generate patch: %w", pErr), input)
 		}
 		if a.PatchHook != nil {
-			updateArgs.Ops, pErr = a.PatchHook(updateArgs.Ops)
+			updateArgs.Ops, pErr = a.PatchHook(input.State.FormState, updateArgs.Ops)
 			if pErr != nil {
 				return a.handleError(fmt.Errorf("failed to apply patch hook: %w", pErr), input)
 			}
