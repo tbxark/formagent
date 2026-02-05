@@ -6,6 +6,12 @@ import (
 	"github.com/tbxark/formagent/types"
 )
 
+const (
+	OperationAdd     = "add"
+	OperationReplace = "replace"
+	OperationRemove  = "remove"
+)
+
 type Operation struct {
 	Op    string `json:"op" jsonschema:"enum=add,enum=replace,enum=remove,description=RFC6902 operation type (add, replace, remove)"`
 	Path  string `json:"path" jsonschema:"pattern=^/.*$,description=RFC6902 JSON Pointer, must start with '/'"`
