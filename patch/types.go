@@ -16,7 +16,7 @@ type Operation struct {
 	Op          string `json:"op" jsonschema:"enum=add,enum=replace,enum=remove,description=RFC6902 operation type (add, replace, remove)"`
 	Path        string `json:"path" jsonschema:"pattern=^/.*$,description=RFC6902 JSON Pointer, must start with '/'"`
 	Value       any    `json:"value,omitempty" jsonschema:"description=Value to apply for add/replace operations (optional for remove)"`
-	Description string `json:"description,omitempty" jsonschema:"description=Description of the operation"`
+	Description string `json:"description,omitempty" jsonschema:"description=Description of the operation, Defaults to empty string"`
 }
 
 type UpdateFormArgs struct {
