@@ -54,73 +54,72 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 	if input.State.Phase == "" {
 		input.State.Phase = types.PhaseCollecting
 	}
-	response, err := a.runInternal(ctx, input)
+	toolRequest := &types.ToolRequest[T]{
+		State:            input.State.FormState,
+		StateSummary:     a.Spec.Summary(ctx, input.State.FormState),
+		Phase:            input.State.Phase,
+		Messages:         input.ChatHistory,
+		MissingFields:    a.Spec.MissingFacts(ctx, input.State.FormState),
+		ValidationErrors: a.Spec.ValidateFacts(ctx, input.State.FormState),
+		Extra:            make(map[string]any),
+	}
+	response, err := a.runInternal(ctx, toolRequest)
 	if err != nil {
 		return nil, err
 	}
 	return response, nil
 }
 
-func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Response[T], error) {
-
-	missingFields := a.Spec.MissingFacts(ctx, input.State.FormState)
-	validationErrors := a.Spec.ValidateFacts(ctx, input.State.FormState)
-	toolRequest := &types.ToolRequest[T]{
-		State:            input.State.FormState,
-		StateSummary:     a.Spec.Summary(ctx, input.State.FormState),
-		Phase:            input.State.Phase,
-		Messages:         input.ChatHistory,
-		MissingFields:    missingFields,
-		ValidationErrors: validationErrors,
-	}
-
+func (a *FormFlow[T]) runInternal(ctx context.Context, request *types.ToolRequest[T]) (*Response[T], error) {
 	// indent
-	slog.Debug("Parsing indent", "request", toolRequest.State)
-	cmd, err := a.IndentRecognizer.RecognizerIntent(ctx, toolRequest)
+	slog.Debug("Parsing indent", "request", request.State)
+	cmd, err := a.IndentRecognizer.RecognizerIntent(ctx, request)
 	if err != nil {
 		return nil, err
 	}
-	slog.Debug("Parsed indent", "indent", cmd, "input", input)
+	slog.Debug("Parsed indent", "indent", cmd)
+
 	switch cmd {
 	case indent.Confirm:
-		if len(missingFields) == 0 && len(validationErrors) == 0 {
-			return a.handleCommand(cmd, input)
+		if len(request.MissingFields) == 0 && len(request.ValidationErrors) == 0 {
+			return a.handleCommand(cmd, request)
 		}
 	case indent.Cancel:
-		return a.handleCommand(cmd, input)
+		return a.handleCommand(cmd, request)
 	case indent.Edit:
 		// patch
 		slog.Debug("Requesting patch generation")
-		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, toolRequest)
+		updateArgs, pErr := a.PatchGenerator.GeneratePatch(ctx, request)
 		if pErr != nil {
 			return nil, pErr
 		}
 		if a.PatchHook != nil {
-			updateArgs.Ops, pErr = a.PatchHook(input.State.FormState, updateArgs.Ops)
+			updateArgs.Ops, pErr = a.PatchHook(request.State, updateArgs.Ops)
 			if pErr != nil {
 				return nil, pErr
 			}
 		}
+		if len(updateArgs.Ops) == 0 {
+			break
+		}
 		slog.Debug("Applying patch", "ops", updateArgs.Ops)
-		newState, pErr := patch.ApplyRFC6902(input.State.FormState, updateArgs.Ops)
+		newState, pErr := patch.ApplyRFC6902(request.State, updateArgs.Ops)
 		if pErr != nil {
 			return nil, pErr
 		}
-		input.State.FormState = newState
-		slog.Debug("Applied patch", "phase", input.State.Phase, "to_state", input.State.FormState)
-		if toolRequest.Extra == nil {
-			toolRequest.Extra = make(map[string]any)
-		}
-		toolRequest.Extra["ops"] = updateArgs.Ops
+		// update state
+		request.State = newState
+		request.StateSummary = a.Spec.Summary(ctx, request.State)
+		request.Extra["ops"] = updateArgs.Ops
 	case indent.DoNothing:
 		break
 	}
 
 	// dialogue
-	toolRequest.MissingFields = a.Spec.MissingFacts(ctx, input.State.FormState)
-	toolRequest.ValidationErrors = a.Spec.ValidateFacts(ctx, input.State.FormState)
+	request.MissingFields = a.Spec.MissingFacts(ctx, request.State)
+	request.ValidationErrors = a.Spec.ValidateFacts(ctx, request.State)
 	slog.Debug("Generating dialogue")
-	question, err := a.DialogueGenerator.GenerateDialogue(ctx, toolRequest)
+	question, err := a.DialogueGenerator.GenerateDialogue(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -128,14 +127,20 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, input *Request[T]) (*Resp
 
 	return &Response[T]{
 		Message: question,
-		State:   input.State,
+		State: &State[T]{
+			Phase:     request.Phase,
+			FormState: request.State,
+		},
 	}, nil
 }
 
-func (a *FormFlow[T]) handleCommand(cmd indent.Intent, input *Request[T]) (*Response[T], error) {
+func (a *FormFlow[T]) handleCommand(cmd indent.Intent, request *types.ToolRequest[T]) (*Response[T], error) {
 	resp := &Response[T]{
-		Message:  "",
-		State:    input.State,
+		Message: "",
+		State: &State[T]{
+			Phase:     request.Phase,
+			FormState: request.State,
+		},
 		Metadata: map[string]string{},
 	}
 	switch cmd {
