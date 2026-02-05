@@ -7,8 +7,7 @@ import (
 )
 
 type FormSpec[T any] interface {
+	Summary(ctx context.Context, current T) string
 	MissingFacts(ctx context.Context, current T) []types.FieldInfo
 	ValidateFacts(ctx context.Context, current T) []types.FieldInfo
-
-	Summary(ctx context.Context, current T) string
 }

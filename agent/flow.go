@@ -110,14 +110,14 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, request *types.ToolReques
 		// update state
 		request.State = newState
 		request.StateSummary = a.Spec.Summary(ctx, request.State)
+		request.MissingFields = a.Spec.MissingFacts(ctx, request.State)
+		request.ValidationErrors = a.Spec.ValidateFacts(ctx, request.State)
 		request.Extra["ops"] = updateArgs.Ops
 	case indent.DoNothing:
 		break
 	}
 
 	// dialogue
-	request.MissingFields = a.Spec.MissingFacts(ctx, request.State)
-	request.ValidationErrors = a.Spec.ValidateFacts(ctx, request.State)
 	slog.Debug("Generating dialogue")
 	question, err := a.DialogueGenerator.GenerateDialogue(ctx, request)
 	if err != nil {
