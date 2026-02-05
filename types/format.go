@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/olekukonko/tablewriter"
-	"github.com/olekukonko/tablewriter/renderer"
 )
 
 func FormatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
@@ -17,12 +15,28 @@ func FormatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
 	}
 	var buf strings.Builder
 	buf.WriteString("# Missing required fields:\n")
-	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
-	table.Header("Field", "Pointer", "Description")
 	for _, field := range fields {
-		_ = table.Append(field.DisplayName, field.JSONPointer, field.Description)
+		buf.WriteString("- ")
+		if field.DisplayName != "" {
+			buf.WriteString(field.DisplayName)
+			if field.JSONPointer != "" {
+				buf.WriteString(" (`")
+				buf.WriteString(field.JSONPointer)
+				buf.WriteString("`)")
+			}
+		} else if field.JSONPointer != "" {
+			buf.WriteString("`")
+			buf.WriteString(field.JSONPointer)
+			buf.WriteString("`")
+		} else {
+			buf.WriteString("(unnamed)")
+		}
+		if field.Description != "" {
+			buf.WriteString(": ")
+			buf.WriteString(field.Description)
+		}
+		buf.WriteString("\n")
 	}
-	_ = table.Render()
 	return buf.String()
 }
 
@@ -32,12 +46,21 @@ func FormatValidationErrorsSection(errors []FieldInfo) string {
 	}
 	var buf strings.Builder
 	buf.WriteString("# Validation errors:\n")
-	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
-	table.Header("Pointer", "Error")
 	for _, err := range errors {
-		_ = table.Append(err.JSONPointer, err.Description)
+		buf.WriteString("- ")
+		if err.JSONPointer != "" {
+			buf.WriteString("`")
+			buf.WriteString(err.JSONPointer)
+			buf.WriteString("`")
+		} else {
+			buf.WriteString("(unknown)")
+		}
+		if err.Description != "" {
+			buf.WriteString(": ")
+			buf.WriteString(err.Description)
+		}
+		buf.WriteString("\n")
 	}
-	_ = table.Render()
 	return buf.String()
 }
 
@@ -45,14 +68,58 @@ func FormatMessageHistory(messages []*schema.Message) string {
 	if len(messages) == 0 {
 		return ""
 	}
-	var buf strings.Builder
-	buf.WriteString("# Dialogue history:\n")
-	table := tablewriter.NewTable(&buf, tablewriter.WithRenderer(renderer.NewMarkdown()))
-	table.Header("Role", "Content")
-	for _, msg := range messages {
-		_ = table.Append(msg.Role, msg.Content)
+	lastUserIndex := -1
+	for i := len(messages) - 1; i >= 0; i-- {
+		if string(messages[i].Role) == "user" {
+			lastUserIndex = i
+			break
+		}
 	}
-	_ = table.Render()
+	var history strings.Builder
+	for i, msg := range messages {
+		if i == lastUserIndex {
+			continue
+		}
+		history.WriteString("- ")
+		if msg.Role != "" {
+			history.WriteString(string(msg.Role))
+		} else {
+			history.WriteString("unknown")
+		}
+		if msg.Content != "" {
+			history.WriteString(": ")
+			history.WriteString(msg.Content)
+		} else {
+			history.WriteString(": (empty)")
+		}
+		history.WriteString("\n")
+	}
+	var buf strings.Builder
+	if history.Len() > 0 {
+		buf.WriteString("# Dialogue history:\n")
+		buf.WriteString(history.String())
+	}
+	if lastUserIndex != -1 {
+		if buf.Len() > 0 {
+			buf.WriteString("\n")
+		}
+		buf.WriteString("# Latest user message:\n")
+		content := messages[lastUserIndex].Content
+		if content == "" {
+			buf.WriteString("> (empty)")
+			return buf.String()
+		}
+		lines := strings.Split(content, "\n")
+		for i, line := range lines {
+			buf.WriteString("> ")
+			if line != "" {
+				buf.WriteString(line)
+			}
+			if i != len(lines)-1 {
+				buf.WriteString("\n")
+			}
+		}
+	}
 	return buf.String()
 }
 
