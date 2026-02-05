@@ -11,7 +11,7 @@ import (
 	"github.com/olekukonko/tablewriter/renderer"
 )
 
-func formatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
+func FormatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
 	if len(fields) == 0 {
 		return ""
 	}
@@ -26,7 +26,7 @@ func formatMissingFieldsSectionForDialogue(fields []FieldInfo) string {
 	return buf.String()
 }
 
-func formatValidationErrorsSection(errors []FieldInfo) string {
+func FormatValidationErrorsSection(errors []FieldInfo) string {
 	if len(errors) == 0 {
 		return ""
 	}
@@ -41,7 +41,7 @@ func formatValidationErrorsSection(errors []FieldInfo) string {
 	return buf.String()
 }
 
-func formatMessageHistory(messages []*schema.Message) string {
+func FormatMessageHistory(messages []*schema.Message) string {
 	if len(messages) == 0 {
 		return ""
 	}
@@ -71,13 +71,13 @@ func FormatToolRequest[T any](req *ToolRequest[T]) (string, error) {
 	if req.Phase != "" {
 		sections = append(sections, fmt.Sprintf("# Current Phase:\n%s", req.Phase))
 	}
-	if s := formatMessageHistory(req.Messages); s != "" {
+	if s := FormatMessageHistory(req.Messages); s != "" {
 		sections = append(sections, s)
 	}
-	if s := formatMissingFieldsSectionForDialogue(req.MissingFields); s != "" {
+	if s := FormatMissingFieldsSectionForDialogue(req.MissingFields); s != "" {
 		sections = append(sections, s)
 	}
-	if s := formatValidationErrorsSection(req.ValidationErrors); s != "" {
+	if s := FormatValidationErrorsSection(req.ValidationErrors); s != "" {
 		sections = append(sections, s)
 	}
 	return strings.Join(sections, "\n\n"), nil

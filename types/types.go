@@ -26,4 +26,5 @@ type ToolRequest[T any] struct {
 
 	MissingFields    []FieldInfo
 	ValidationErrors []FieldInfo
+	Extra            map[string]any
 }

@@ -27,9 +27,8 @@ func NewChain[TInput, TOutput any](
 
 	toolInfo, err := utils.GoStruct2ToolInfo[TOutput](toolName, toolDesc)
 	if err != nil {
-		return nil, fmt.Errorf("创建 ToolInfo 失败: %w", err)
+		return nil, fmt.Errorf("convert tool info failed: %w", err)
 	}
-
 	return &Chain[TInput, TOutput]{
 		PromptBuilder: promptBuilder,
 		ChatModel:     chatModel,
@@ -40,7 +39,7 @@ func NewChain[TInput, TOutput any](
 func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOutput, error) {
 	messages, err := s.PromptBuilder(ctx, input)
 	if err != nil {
-		return nil, fmt.Errorf("构建提示词失败: %w", err)
+		return nil, fmt.Errorf("build prompt failed: %w", err)
 	}
 
 	response, err := s.ChatModel.Generate(ctx, messages,
@@ -48,17 +47,15 @@ func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOu
 		model.WithToolChoice(schema.ToolChoiceForced, s.ToolInfo.Name),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("调用模型失败: %w", err)
+		return nil, fmt.Errorf("call model failed: %w", err)
 	}
-
 	if len(response.ToolCalls) == 0 {
-		return nil, fmt.Errorf("模型未返回 ToolCall，响应内容: %s", response.Content)
+		return nil, fmt.Errorf("no ToolCall found in model response: %s", response.Content)
 	}
 
 	var result TOutput
 	if err := sonic.UnmarshalString(response.ToolCalls[0].Function.Arguments, &result); err != nil {
-		return nil, fmt.Errorf("解析 ToolCall 参数失败: %w, 参数内容: %s",
-			err, response.ToolCalls[0].Function.Arguments)
+		return nil, fmt.Errorf("parse ToolCall arguments failed: %w", err)
 	}
 
 	return &result, nil
@@ -67,7 +64,7 @@ func (s *Chain[TInput, TOutput]) Invoke(ctx context.Context, input TInput) (*TOu
 func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput) (*schema.StreamReader[*TOutput], error) {
 	messages, err := s.PromptBuilder(ctx, input)
 	if err != nil {
-		return nil, fmt.Errorf("构建提示词失败: %w", err)
+		return nil, fmt.Errorf("build prompt failed: %w", err)
 	}
 
 	streamReader, err := s.ChatModel.Stream(ctx, messages,
@@ -75,17 +72,17 @@ func (s *Chain[TInput, TOutput]) Stream(ctx context.Context, input TInput) (*sch
 		model.WithToolChoice(schema.ToolChoiceForced, s.ToolInfo.Name),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("流式调用模型失败: %w", err)
+		return nil, fmt.Errorf("call model failed: %w", err)
 	}
 
 	outputReader := schema.StreamReaderWithConvert(streamReader, func(msg *schema.Message) (*TOutput, error) {
 		if len(msg.ToolCalls) == 0 {
-			return nil, fmt.Errorf("流式响应中未找到 ToolCall")
+			return nil, fmt.Errorf("no ToolCall found in model response: %s", msg.Content)
 		}
 
 		var result TOutput
 		if err := sonic.UnmarshalString(msg.ToolCalls[0].Function.Arguments, &result); err != nil {
-			return nil, fmt.Errorf("解析 ToolCall 参数失败: %w", err)
+			return nil, fmt.Errorf("parse ToolCall arguments failed: %w", err)
 		}
 
 		return &result, nil
