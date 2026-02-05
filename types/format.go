@@ -1,8 +1,8 @@
 package types
 
 import (
-	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -80,18 +80,18 @@ func FormatMessageHistory(messages []*schema.Message) string {
 		if i == lastUserIndex {
 			continue
 		}
-		history.WriteString("- ")
+		history.WriteString("#### ")
 		if msg.Role != "" {
 			history.WriteString(string(msg.Role))
 		} else {
 			history.WriteString("unknown")
 		}
-		if msg.Content != "" {
-			history.WriteString(": ")
-			history.WriteString(msg.Content)
-		} else {
-			history.WriteString(": (empty)")
+		history.WriteString(": \n")
+		content := msg.Content
+		if content == "" {
+			content = "(empty)"
 		}
+		history.WriteString(WrapMarkdownCodeBlock(content, ""))
 		history.WriteString("\n")
 	}
 	var buf strings.Builder
@@ -106,37 +106,23 @@ func FormatMessageHistory(messages []*schema.Message) string {
 		buf.WriteString("# Latest user message:\n")
 		content := messages[lastUserIndex].Content
 		if content == "" {
-			buf.WriteString("> (empty)")
-			return buf.String()
+			content = "(empty)"
 		}
-		lines := strings.Split(content, "\n")
-		for i, line := range lines {
-			buf.WriteString("> ")
-			if line != "" {
-				buf.WriteString(line)
-			}
-			if i != len(lines)-1 {
-				buf.WriteString("\n")
-			}
-		}
+		buf.WriteString(WrapMarkdownCodeBlock(content, ""))
+		return buf.String()
 	}
 	return buf.String()
 }
 
 func FormatToolRequest[T any](req *ToolRequest[T]) (string, error) {
-	stateJSON, err := json.Marshal(req.State)
-	if err != nil {
-		return "", err
-	}
 	sections := []string{
 		fmt.Sprintf("# Current Date: \n %s", time.Now().Format(time.RFC3339)),
-		fmt.Sprintf("# Form state JSON:\n```json\n%s\n```", string(stateJSON)),
 	}
 	if req.StateSummary != "" {
-		sections = append(sections, fmt.Sprintf("# Form state summary:\n%s", req.StateSummary))
+		sections = append(sections, fmt.Sprintf("# Form state:\n%s", req.StateSummary))
 	}
 	if req.Phase != "" {
-		sections = append(sections, fmt.Sprintf("# Current Phase:\n%s", req.Phase))
+		sections = append(sections, fmt.Sprintf("# Current Phase:\n**%s**", req.Phase))
 	}
 	if s := FormatMessageHistory(req.Messages); s != "" {
 		sections = append(sections, s)
@@ -148,4 +134,29 @@ func FormatToolRequest[T any](req *ToolRequest[T]) (string, error) {
 		sections = append(sections, s)
 	}
 	return strings.Join(sections, "\n\n"), nil
+}
+
+func WrapMarkdownCodeBlock(text, lang string) string {
+	re := regexp.MustCompile("`+")
+	longest := 0
+	for _, m := range re.FindAllString(text, -1) {
+		if len(m) > longest {
+			longest = len(m)
+		}
+	}
+	fenceLen := longest + 1
+	if fenceLen < 3 {
+		fenceLen = 3
+	}
+	fence := strings.Repeat("`", fenceLen)
+	var sb strings.Builder
+	sb.WriteString(fence)
+	if lang != "" {
+		sb.WriteString(lang)
+	}
+	sb.WriteString("\n")
+	sb.WriteString(text)
+	sb.WriteString("\n")
+	sb.WriteString(fence)
+	return sb.String()
 }

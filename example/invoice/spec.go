@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/eino-contrib/jsonschema"
@@ -25,7 +26,7 @@ var _ agent.FormSpec[*Invoice] = (*InvoiceFormSpec)(nil)
 type InvoiceFormSpec struct {
 }
 
-func (InvoiceFormSpec) JsonSchema() (string, error) {
+func (i *InvoiceFormSpec) JsonSchema() (string, error) {
 	schema := jsonschema.Reflect(&Invoice{})
 	schema.Title = "报销单"
 	schema.Description = "用于提交报销申请的表单，包含报销抬头、金额、日期、类别、收款人和备注等字段。"
@@ -36,7 +37,7 @@ func (InvoiceFormSpec) JsonSchema() (string, error) {
 	return string(schemaBytes), nil
 }
 
-func (InvoiceFormSpec) MissingFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
+func (i *InvoiceFormSpec) MissingFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
 	var missing []types.FieldInfo
 	if current.Title == "" {
 		missing = append(missing, types.FieldInfo{
@@ -77,7 +78,7 @@ func (InvoiceFormSpec) MissingFacts(ctx context.Context, current *Invoice) []typ
 	return missing
 }
 
-func (InvoiceFormSpec) ValidateFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
+func (i *InvoiceFormSpec) ValidateFacts(ctx context.Context, current *Invoice) []types.FieldInfo {
 	var errs []types.FieldInfo
 	if current.Amount < 0 {
 		errs = append(errs, types.FieldInfo{
@@ -88,7 +89,20 @@ func (InvoiceFormSpec) ValidateFacts(ctx context.Context, current *Invoice) []ty
 	return errs
 }
 
-func (InvoiceFormSpec) Summary(ctx context.Context, current *Invoice) string {
-	return fmt.Sprintf("报销单摘要：\n抬头：%s\n金额：%.2f 元\n日期：%s\n类别：%s\n收款人：%s\n备注：%s",
-		current.Title, current.Amount, current.Date, current.Category, current.Payee, current.Description)
+func (i *InvoiceFormSpec) Summary(ctx context.Context, current *Invoice) string {
+	var sb strings.Builder
+	sb.WriteString("## Summary：\n")
+	sb.WriteString(types.WrapMarkdownCodeBlock(fmt.Sprintf("报销单摘要：\n抬头：%s\n金额：%.2f 元\n日期：%s\n类别：%s\n收款人：%s\n备注：%s",
+		current.Title, current.Amount, current.Date, current.Category, current.Payee, current.Description), "markdown"))
+	if stateJson, err := json.Marshal(current); err == nil {
+		sb.WriteString("\n\n## Form state json:\n```json\n")
+		sb.WriteString(string(stateJson))
+		sb.WriteString("\n```\n")
+	}
+	if schemaJSON, err := i.JsonSchema(); err == nil {
+		sb.WriteString("\n\n## Form state schema:\n```json\n")
+		sb.WriteString(schemaJSON)
+		sb.WriteString("\n```\n")
+	}
+	return sb.String()
 }
