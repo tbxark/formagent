@@ -18,3 +18,9 @@ type Response[T any] struct {
 	State    *State[T]         `json:"state,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
+
+type StreamResponse[T any] struct {
+	MessageStream *schema.StreamReader[string] `json:"-"`
+	State         *State[T]                    `json:"state,omitempty"`
+	Metadata      map[string]string            `json:"metadata,omitempty"`
+}

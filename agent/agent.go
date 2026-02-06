@@ -58,19 +58,50 @@ func (a *Agent[T]) Run(ctx context.Context, input *adk.AgentInput, options ...ad
 			})
 			return
 		}
-		resp, err := a.flow.Invoke(ctx, &Request[T]{
+		req := &Request[T]{
 			State:       state,
 			ChatHistory: input.Messages,
-		})
-		if err != nil {
+		}
+		if input.EnableStreaming {
+			streamResp, invokeErr := a.flow.Stream(ctx, req)
+			if invokeErr != nil {
+				gen.Send(&adk.AgentEvent{Err: fmt.Errorf("flow stream invoke failed: %w", invokeErr)})
+				return
+			}
+			if saveErr := a.store.Save(ctx, streamResp.State); saveErr != nil {
+				gen.Send(&adk.AgentEvent{Err: saveErr})
+				return
+			}
+			msgStream := schema.StreamReaderWithConvert[string, *schema.Message](streamResp.MessageStream, func(content string) (*schema.Message, error) {
+				return &schema.Message{
+					Role:    schema.Assistant,
+					Content: content,
+					Extra: map[string]any{
+						"phase": string(streamResp.State.Phase),
+					},
+				}, nil
+			})
 			gen.Send(&adk.AgentEvent{
-				Err: fmt.Errorf("flow invoke failed: %w", err),
+				Output: &adk.AgentOutput{
+					MessageOutput: &adk.MessageVariant{
+						IsStreaming:   true,
+						MessageStream: msgStream,
+						Role:          schema.Assistant,
+					},
+				},
 			})
 			return
 		}
-		err = a.store.Save(ctx, resp.State)
-		if err != nil {
-			gen.Send(&adk.AgentEvent{Err: err})
+
+		resp, invokeErr := a.flow.Invoke(ctx, req)
+		if invokeErr != nil {
+			gen.Send(&adk.AgentEvent{
+				Err: fmt.Errorf("flow invoke failed: %w", invokeErr),
+			})
+			return
+		}
+		if saveErr := a.store.Save(ctx, resp.State); saveErr != nil {
+			gen.Send(&adk.AgentEvent{Err: saveErr})
 			return
 		}
 		gen.Send(&adk.AgentEvent{

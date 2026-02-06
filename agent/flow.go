@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/dialogue"
 	"github.com/tbxark/formagent/indent"
 	"github.com/tbxark/formagent/patch"
@@ -51,10 +52,28 @@ func NewToolBasedFormFlow[T any](
 }
 
 func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[T], error) {
+	toolRequest := a.newToolRequest(ctx, input)
+	response, err := a.runInternal(ctx, toolRequest)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (a *FormFlow[T]) Stream(ctx context.Context, input *Request[T]) (*StreamResponse[T], error) {
+	toolRequest := a.newToolRequest(ctx, input)
+	response, err := a.runInternalStream(ctx, toolRequest)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (a *FormFlow[T]) newToolRequest(ctx context.Context, input *Request[T]) *types.ToolRequest[T] {
 	if input.State.Phase == "" {
 		input.State.Phase = types.PhaseCollecting
 	}
-	toolRequest := &types.ToolRequest[T]{
+	return &types.ToolRequest[T]{
 		State:            input.State.FormState,
 		StateSummary:     a.Spec.Summary(ctx, input.State.FormState),
 		Phase:            input.State.Phase,
@@ -63,14 +82,63 @@ func (a *FormFlow[T]) Invoke(ctx context.Context, input *Request[T]) (*Response[
 		ValidationErrors: a.Spec.ValidateFacts(ctx, input.State.FormState),
 		Extra:            make(map[string]any),
 	}
-	response, err := a.runInternal(ctx, toolRequest)
-	if err != nil {
-		return nil, err
-	}
-	return response, nil
 }
 
 func (a *FormFlow[T]) runInternal(ctx context.Context, request *types.ToolRequest[T]) (*Response[T], error) {
+	commandResp, err := a.preprocessRequest(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if commandResp != nil {
+		return commandResp, nil
+	}
+
+	// dialogue
+	slog.Debug("Generating dialogue")
+	question, err := a.DialogueGenerator.GenerateDialogue(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	slog.Debug("Generated dialogue", "question", question)
+
+	return &Response[T]{
+		Message: question,
+		State: &State[T]{
+			Phase:     request.Phase,
+			FormState: request.State,
+		},
+	}, nil
+}
+
+func (a *FormFlow[T]) runInternalStream(ctx context.Context, request *types.ToolRequest[T]) (*StreamResponse[T], error) {
+	commandResp, err := a.preprocessRequest(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if commandResp != nil {
+		return &StreamResponse[T]{
+			MessageStream: schema.StreamReaderFromArray([]string{commandResp.Message}),
+			State:         commandResp.State,
+			Metadata:      commandResp.Metadata,
+		}, nil
+	}
+
+	slog.Debug("Generating dialogue stream")
+	stream, err := a.DialogueGenerator.GenerateDialogueStream(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	return &StreamResponse[T]{
+		MessageStream: stream,
+		State: &State[T]{
+			Phase:     request.Phase,
+			FormState: request.State,
+		},
+	}, nil
+}
+
+func (a *FormFlow[T]) preprocessRequest(ctx context.Context, request *types.ToolRequest[T]) (*Response[T], error) {
 	// indent
 	slog.Debug("Parsing indent", "request", request.State)
 	cmd, err := a.IndentRecognizer.RecognizerIntent(ctx, request)
@@ -117,21 +185,7 @@ func (a *FormFlow[T]) runInternal(ctx context.Context, request *types.ToolReques
 		break
 	}
 
-	// dialogue
-	slog.Debug("Generating dialogue")
-	question, err := a.DialogueGenerator.GenerateDialogue(ctx, request)
-	if err != nil {
-		return nil, err
-	}
-	slog.Debug("Generated dialogue", "question", question)
-
-	return &Response[T]{
-		Message: question,
-		State: &State[T]{
-			Phase:     request.Phase,
-			FormState: request.State,
-		},
-	}, nil
+	return nil, nil
 }
 
 func (a *FormFlow[T]) handleCommand(cmd indent.Intent, request *types.ToolRequest[T]) (*Response[T], error) {
