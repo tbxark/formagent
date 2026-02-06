@@ -3,40 +3,59 @@ package dialogue
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/tbxark/formagent/types"
 )
 
-type LocalDialogueGenerator[T any] struct{}
+type LocalDialogueGenerator[T any] struct {
+	MergeAllUnvalidatedFields bool
+}
 
 func (g *LocalDialogueGenerator[T]) GenerateDialogue(ctx context.Context, req *types.ToolRequest[T]) (string, error) {
-	var message string
 	switch req.Phase {
 	case types.PhaseCollecting:
+		var sb strings.Builder
 		if len(req.ValidationErrors) > 0 {
-			message = "请修正以下错误：\n"
 			for _, err := range req.ValidationErrors {
-				message += fmt.Sprintf("- %s\n", err.Description)
+				if len(err.Description) > 0 {
+					sb.WriteString(err.Description)
+					sb.WriteString("\n")
+				} else {
+					sb.WriteString(fmt.Sprintf("必须填写%s\n", err.DisplayName))
+				}
+				if !g.MergeAllUnvalidatedFields {
+					return sb.String(), nil
+				}
 			}
-		} else if len(req.MissingFields) > 0 {
-			message = "请提供以下信息：\n"
-			for _, field := range req.MissingFields {
-				message += fmt.Sprintf("- %s\n", field.DisplayName)
-			}
-		} else {
-			message = "所有必填字段已完成，请确认信息是否正确。"
 		}
+		if len(req.MissingFields) > 0 {
+			for _, field := range req.MissingFields {
+				if len(field.Description) > 0 {
+					sb.WriteString(field.Description)
+					sb.WriteString("\n")
+				} else {
+					sb.WriteString(fmt.Sprintf("%s填写错误\n", field.DisplayName))
+				}
+				if !g.MergeAllUnvalidatedFields && sb.Len() > 0 {
+					return sb.String(), nil
+				}
+			}
+		}
+		if sb.Len() == 0 {
+			return "请继续填写表单。", nil
+		}
+		return sb.String(), nil
 	case types.PhaseConfirmed:
-		message = "表单已成功提交！"
+		return "表单已成功提交！", nil
 
 	case types.PhaseCancelled:
-		message = "表单填写已取消。"
+		return "表单填写已取消。", nil
 
 	default:
-		message = "请继续填写表单。"
+		return "请继续填写表单。", nil
 	}
-	return message, nil
 }
 
 func (g *LocalDialogueGenerator[T]) GenerateDialogueStream(ctx context.Context, req *types.ToolRequest[T]) (*schema.StreamReader[string], error) {
